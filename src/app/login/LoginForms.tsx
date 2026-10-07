@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react';
 import { FormMessage } from '@/components/FormMessage';
 import { INITIAL_FORM_STATE } from '@/lib/form-state';
+import { SITE } from '@/lib/site';
 import { NICKNAME_MAX, PASSWORD_MIN } from '@/lib/validation';
 import {
   sendEmailOtp,
@@ -56,7 +57,17 @@ function SignInForm({ next }: { next: string }) {
       <button type="submit" disabled={pending} className="btn-primary w-full">
         {pending ? '登入中…' : '登入'}
       </button>
-      <p className="text-center text-xs text-muted">忘記密碼？請私訊 IG，我會幫你重設。</p>
+      <p className="text-center text-xs text-muted">
+        忘記密碼？請
+        {SITE.instagramUrl ? (
+          <a href={SITE.instagramUrl} target="_blank" rel="noopener noreferrer" className="text-accent underline">
+            私訊 IG
+          </a>
+        ) : (
+          '私訊 IG'
+        )}
+        ，我會幫你重設。
+      </p>
     </form>
   );
 }
