@@ -17,6 +17,7 @@ const STUBS = `
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+  create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
   alter table storage.objects enable row level security;
   grant all on storage.objects to authenticated;
   -- Supabase 預設會把 public schema 的表授權給 anon/authenticated，模擬這個預設
@@ -211,6 +212,112 @@ await as(carol, async () => {
     assert.equal(del.affectedRows, 5);
   });
   console.log('✓ 意見箱：RPC 驗證、RLS、每日上限、admin 可刪');
+}
+
+// 個人檔案（0005）：公開 / 私人、頭像路徑、最愛詩歌、頭像 storage
+{
+  const eve = await mk({ username: 'eve', nickname: '伊芙' });
+  const frank = await mk({ username: 'frank', nickname: '法蘭克' });
+  const noNick = await mk({ username: 'nonick2' });
+  const songIds = (await db.query(`select id from songs where book='supplement' order by id limit 6`)).rows.map((r) => r.id);
+
+  await as(eve, async () => {
+    await db.query(`update profiles set bio = '喜歡慢板的詩歌', ig_handle = 'eve.sings' where id = $1`, [eve]);
+    await expectErr(db.query(`update profiles set bio = $2 where id = $1`, [eve, 'x'.repeat(151)]), /check constraint/, '自介超過 150 字被擋');
+    await expectErr(db.query(`update profiles set ig_handle = 'Bad Name!' where id = $1`, [eve]), /check constraint/, 'IG 帳號格式不對被擋');
+    await expectErr(db.query(`update profiles set avatar_path = $2 where id = $1`, [eve, `${frank}/a.webp`]), /check constraint/, '頭像路徑不能指向別人的資料夾');
+    await expectErr(db.query(`update profiles set avatar_path = $2 where id = $1`, [eve, `${eve}/../x.webp`]), /check constraint/, '頭像路徑不能含 ..');
+    await db.query(`update profiles set avatar_path = $2 where id = $1`, [eve, `${eve}/1700000000.webp`]);
+    await expectErr(db.query(`update profiles set username = 'hack' where id = $1`, [eve]), /permission denied/, '使用者不能改自己的 username');
+    console.log('✓ 個人檔案欄位的 constraint 與欄位權限');
+  });
+
+  // 預設私人：anon 與其他人都看不到
+  await as(null, async () => {
+    assert.equal((await one(`select count(*)::int n from public_profiles`)).n, 0);
+  });
+  await as(frank, async () => {
+    assert.equal((await one(`select count(*)::int n from public_profiles`)).n, 0);
+  });
+  console.log('✓ 預設私人：public_profiles 看不到任何人');
+
+  // 最愛詩歌
+  await as(eve, async () => {
+    await db.query(`select set_favorites($1)`, [songIds.slice(0, 3)]);
+    assert.deepEqual((await db.query(`select song_id from favorite_songs order by position`)).rows.map((r) => r.song_id), songIds.slice(0, 3));
+    await db.query(`select set_favorites($1)`, [[songIds[2], songIds[0]]]); // 整份取代、保留順序
+    assert.deepEqual((await db.query(`select song_id from favorite_songs order by position`)).rows.map((r) => r.song_id), [songIds[2], songIds[0]]);
+    await expectErr(db.query(`select set_favorites($1)`, [songIds]), /too_many_favorites/, '最愛最多 5 首');
+    await expectErr(db.query(`select set_favorites($1)`, [[songIds[0], songIds[0]]]), /duplicate_favorite/, '最愛不能重複');
+    await expectErr(db.query(`select set_favorites($1)`, [[999999]]), /song_not_found/, '最愛的歌必須存在');
+    await expectErr(db.query(`insert into favorite_songs (user_id, song_id, position) values ($1, $2, 1)`, [eve, songIds[4]]), /permission denied/, '不能繞過 RPC 直接寫 favorite_songs');
+    assert.equal((await one(`select count(*)::int n from favorite_songs`)).n, 2); // 失敗的呼叫不影響原本的最愛
+  });
+  await as(noNick, () => expectErr(db.query(`select set_favorites($1)`, [[songIds[0]]]), /nickname_required/, '沒暱稱不能設最愛'));
+  await as(null, () => expectErr(db.query(`select set_favorites($1)`, [[songIds[0]]]), /permission denied/, 'anon 不能設最愛'));
+  await as(frank, async () => {
+    assert.equal((await one(`select count(*)::int n from favorite_songs`)).n, 0);
+    await expectErr(db.query(`delete from favorite_songs`), /permission denied/, '不能直接刪 favorite_songs');
+  });
+  await as(null, async () => assert.equal((await one(`select count(*)::int n from favorite_songs`)).n, 0));
+  console.log('✓ set_favorites：整份取代、上限、不重複、私人檔案的最愛別人看不到');
+
+  // 公開
+  await as(eve, () => db.query(`update profiles set is_public = true where id = $1`, [eve]));
+  await as(eve, async () => {
+    await db.query(`select request_song($1)`, [songIds[0]]);
+    await db.query(`select request_song($1)`, [songIds[1]]);
+  });
+  await as(null, async () => {
+    const row = await one(`select * from public_profiles`);
+    assert.deepEqual(
+      { ...row, created_at: undefined },
+      { id: eve, nickname: '伊芙', bio: '喜歡慢板的詩歌', avatar_path: `${eve}/1700000000.webp`, ig_handle: 'eve.sings', created_at: undefined, request_total: 2, uploaded_total: 0 },
+    );
+    assert.equal(Object.keys(row).includes('username'), false);
+    assert.equal(Object.keys(row).includes('is_admin'), false);
+    await expectErr(db.query(`select username from public_profiles`), /does not exist/, 'public_profiles 不含 username');
+    await expectErr(db.query(`select count(*) from profiles`), /permission denied/, '公開檔案不代表能讀 profiles 表');
+    assert.equal((await one(`select count(*)::int n from favorite_songs`)).n, 2);
+    await expectErr(db.query(`select count(*) from requests`), /permission denied/, '公開檔案不會公開 requests');
+  });
+  await as(frank, async () => {
+    assert.equal((await one(`select count(*)::int n from public_profiles`)).n, 1);
+    assert.equal((await one(`select count(*)::int n from favorite_songs`)).n, 2);
+    assert.equal((await one(`select count(*)::int n from profiles`)).n, 1); // 仍然只看得到自己的
+    assert.equal((await one(`select count(*)::int n from requests`)).n, 0);
+  });
+  await as(eve, () => db.query(`update profiles set is_public = false where id = $1`, [eve]));
+  await as(null, async () => {
+    assert.equal((await one(`select count(*)::int n from public_profiles`)).n, 0);
+    assert.equal((await one(`select count(*)::int n from favorite_songs`)).n, 0);
+  });
+  console.log('✓ 公開檔案：只暴露安全欄位與總數，改回私人立刻消失');
+
+  // 頭像 storage：只能動自己的資料夾
+  await as(eve, async () => {
+    await db.query(`insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [`${eve}/a.webp`]);
+    await expectErr(db.query(`insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [`${frank}/a.webp`]), /row-level/, '不能上傳到別人的頭像資料夾');
+    await expectErr(db.query(`insert into storage.objects (bucket_id, name) values ('avatars', 'a.webp')`), /row-level/, '不能上傳到頭像 bucket 根目錄');
+  });
+  await as(frank, async () => {
+    assert.equal((await one(`select count(*)::int n from storage.objects where bucket_id = 'avatars'`)).n, 0);
+    assert.equal((await db.query(`delete from storage.objects where bucket_id = 'avatars'`)).affectedRows, 0);
+  });
+  await as(eve, async () => {
+    assert.equal((await db.query(`delete from storage.objects where bucket_id = 'avatars'`)).affectedRows, 1);
+  });
+  console.log('✓ 頭像 storage：每人只能新增 / 讀 / 刪自己資料夾裡的檔案');
+
+  // 刪除帳號：auth.users 刪除會連帶清掉 profile、點歌、最愛，並扣回 request_count
+  const before = (await one(`select request_count from songs where id = $1`, [songIds[0]])).request_count;
+  await as(eve, () => db.query(`select set_favorites($1)`, [[songIds[0]]]));
+  await db.query(`delete from auth.users where id = $1`, [eve]);
+  assert.equal((await one(`select count(*)::int n from profiles where id = $1`, [eve])).n, 0);
+  assert.equal((await one(`select count(*)::int n from favorite_songs where user_id = $1`, [eve])).n, 0);
+  assert.equal((await one(`select count(*)::int n from requests where user_id = $1`, [eve])).n, 0);
+  assert.equal((await one(`select request_count from songs where id = $1`, [songIds[0]])).request_count, before - 1);
+  console.log('✓ 刪除帳號會連帶清掉個人資料並扣回點播數');
 }
 
 // 0002 的回填：模擬已經只跑過 0001、帳號 username 為空的正式資料庫
