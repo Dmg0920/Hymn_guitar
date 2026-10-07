@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  FEEDBACK_MAX,
   escapeLikePattern,
+  parseFeedback,
   parseNickname,
   parseOtp,
   parsePostUrl,
@@ -62,4 +64,13 @@ test('parseNickname / parseOtp', () => {
 
 test('escapeLikePattern 跳脫萬用字元', () => {
   assert.equal(escapeLikePattern('100%_\\'), '100\\%\\_\\\\');
+});
+
+test('parseFeedback：去頭尾空白、擋空白與過長', () => {
+  assert.deepEqual(parseFeedback('  很好用！\n謝謝 '), { ok: true, value: '很好用！\n謝謝' });
+  assert.equal(parseFeedback('').ok, false);
+  assert.equal(parseFeedback('  \n ').ok, false);
+  assert.equal(parseFeedback(null).ok, false);
+  assert.equal(parseFeedback('一'.repeat(FEEDBACK_MAX)).ok, true);
+  assert.equal(parseFeedback('一'.repeat(FEEDBACK_MAX + 1)).ok, false);
 });
