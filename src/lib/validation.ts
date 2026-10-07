@@ -3,6 +3,7 @@
 export const NICKNAME_MAX = 20;
 export const MESSAGE_MAX = 100;
 export const TITLE_MAX = 50;
+export const FEEDBACK_MAX = 500;
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 72;
 
@@ -63,6 +64,13 @@ export function parseOptionalText(raw: unknown, max: number, label: string): Par
   const value = String(raw ?? '').trim();
   if (value.length === 0) return ok(null);
   if (value.length > max) return fail(`${label}最多 ${max} 個字`);
+  return ok(value);
+}
+
+export function parseFeedback(raw: unknown): Parsed<string> {
+  const value = String(raw ?? '').trim();
+  if (value.length === 0) return fail('請輸入想說的話');
+  if (value.length > FEEDBACK_MAX) return fail(`意見最多 ${FEEDBACK_MAX} 個字`);
   return ok(value);
 }
 

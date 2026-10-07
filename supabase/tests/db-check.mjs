@@ -172,6 +172,47 @@ await as(carol, async () => {
   await expectErr(db.query(`select count(*) from request_log`), /permission denied/, '使用者碰不到 request_log');
 });
 
+// 意見箱（0004）：只能走 submit_feedback()，只有管理員讀得到
+{
+  const dave = await mk({ username: 'dave', nickname: 'D' });
+  const noNick = await mk({ username: 'nonick' });
+  await as(null, () => expectErr(db.query(`select submit_feedback($1)`, ['hi']), /permission denied/, 'anon 不能送意見'));
+  await as(noNick, () => expectErr(db.query(`select submit_feedback($1)`, ['hi']), /nickname_required/, '沒暱稱不能送意見'));
+  await as(dave, async () => {
+    await expectErr(db.query(`select submit_feedback($1)`, ['  \n ']), /feedback_empty/, '空白意見被擋');
+    await expectErr(db.query(`select submit_feedback($1)`, ['x'.repeat(501)]), /feedback_too_long/, '過長意見被擋');
+    await db.query(`select submit_feedback($1)`, ['  網站很好用  ']);
+    await expectErr(db.query(`insert into feedback (user_id, body) values ($1, 'x')`, [dave]), /permission denied/, '不能繞過 RPC 直接 insert feedback');
+    assert.equal((await one(`select count(*)::int n from feedback`)).n, 0);
+    console.log('✓ 一般使用者讀不到自己送出的意見（RLS 只開放管理員）');
+  });
+  await as(alice, async () => {
+    // 有 table 權限但 RLS 只放行管理員：查不到、改 / 刪都影響 0 筆
+    assert.equal((await one(`select count(*)::int n from feedback`)).n, 0);
+    assert.equal((await db.query(`update feedback set is_read = true`)).affectedRows, 0);
+    assert.equal((await db.query(`delete from feedback`)).affectedRows, 0);
+    console.log('✓ 其他使用者看不到、改不了、刪不了意見');
+  });
+  await as(admin, async () => {
+    const rows = (await db.query(`select body, is_read from feedback`)).rows;
+    assert.deepEqual(rows, [{ body: '網站很好用', is_read: false }]);
+    const upd = await db.query(`update feedback set is_read = true`);
+    assert.equal(upd.affectedRows, 1);
+    await expectErr(db.query(`update feedback set body = 'edited'`), /permission denied/, '管理員只能改已讀狀態、不能改內容');
+    console.log('✓ admin 讀得到意見（已 trim）、可標已讀');
+  });
+  // 每日 5 則上限
+  await as(dave, async () => {
+    for (let i = 0; i < 4; i++) await db.query(`select submit_feedback($1)`, [`第 ${i + 2} 則`]);
+    await expectErr(db.query(`select submit_feedback($1)`, ['第 6 則']), /rate_limited/, '一天最多 5 則意見');
+  });
+  await as(admin, async () => {
+    const del = await db.query(`delete from feedback where user_id = $1`, [dave]);
+    assert.equal(del.affectedRows, 5);
+  });
+  console.log('✓ 意見箱：RPC 驗證、RLS、每日上限、admin 可刪');
+}
+
 // 0002 的回填：模擬已經只跑過 0001、帳號 username 為空的正式資料庫
 {
   const legacy = new PGlite();

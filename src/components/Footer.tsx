@@ -42,6 +42,11 @@ export function Footer() {
                   我的點歌
                 </Link>
               </li>
+              <li>
+                <Link href="/feedback" className="inline-block py-1 text-base transition-colors hover:text-accent">
+                  意見箱
+                </Link>
+              </li>
             </ul>
           </nav>
           <div className="space-y-3">

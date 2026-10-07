@@ -58,12 +58,23 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
   if (error) throw new Error(`讀取歌曲失敗：${error.message}`);
   const songs = (data ?? []) as Song[];
   const requesters = await loadRequesters(songs.map((s) => s.id));
+  const unreadFeedback = await countUnreadFeedback();
 
   return (
     <section className="wrap-medium space-y-8 pb-8 pt-12 md:pt-20">
-      <div>
-        <p className="eyebrow">Admin</p>
-        <h1 className="mt-4 font-serif text-5xl font-black tracking-wide md:text-6xl">後台</h1>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow">Admin</p>
+          <h1 className="mt-4 font-serif text-5xl font-black tracking-wide md:text-6xl">後台</h1>
+        </div>
+        <Link href="/admin/feedback" className="btn-ghost min-h-11 px-5 text-sm">
+          意見箱
+          {unreadFeedback > 0 && (
+            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-ink">
+              {unreadFeedback}
+            </span>
+          )}
+        </Link>
       </div>
 
       <form className="card flex flex-wrap gap-2 p-3" role="search">
@@ -117,6 +128,22 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
       <ResetPasswordForm />
     </section>
   );
+}
+
+/**
+ * 未讀意見數。意見箱的 migration（0004）可能還沒執行：此時退回 0，不要讓整個後台掛掉。
+ */
+async function countUnreadFeedback(): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('feedback')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_read', false);
+  if (error) {
+    console.error('countUnreadFeedback failed', error);
+    return 0;
+  }
+  return count ?? 0;
 }
 
 async function loadRequesters(songIds: number[]): Promise<Map<number, Requester[]>> {

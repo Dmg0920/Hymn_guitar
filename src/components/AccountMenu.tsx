@@ -84,6 +84,9 @@ export function AccountMenu({ nickname, isAdmin }: Props) {
         <Link href="/me" className={menuItem}>
           我的點歌 <span aria-hidden="true" className="text-muted">→</span>
         </Link>
+        <Link href="/feedback" className={menuItem}>
+          意見箱 <span aria-hidden="true" className="text-muted">→</span>
+        </Link>
         {isAdmin && (
           <Link href="/admin" className={menuItem}>
             後台 <span aria-hidden="true" className="text-muted">→</span>
