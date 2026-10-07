@@ -27,7 +27,7 @@ pnpm catalog:build      # data/raw/*.txt → 重新產生 supabase/seed.sql
 
 ## 架構
 
-**資料與權限都在資料庫層。** `supabase/migrations/0001_init.sql` 是唯一的 schema 來源：資料表（`profiles`、`songs`、`requests`、`request_log`）、RLS policy、thumbnail storage bucket，以及 `request_song()` RPC。點歌的驗證（登入、暱稱、每日 10 首上限 `c_daily_limit`、已上傳/拒絕狀態、同歌合併計數）全在這個 RPC 內，並以 `raise exception '<code>'` 回傳錯誤代碼；`src/app/request/actions.ts` 的 `RPC_ERRORS` 把代碼對應成中文訊息，新增 RPC 錯誤代碼時兩邊要同步。改 migration 或 RLS 後要跑 `pnpm test:db`（它用最小的 Supabase auth/storage stub，不是真的 Supabase）。
+**資料與權限都在資料庫層。** `supabase/migrations/`（依檔名順序套用；已上線的 migration 不要改，修正請加新檔）是 schema 來源：資料表（`profiles`、`songs`、`requests`、`request_log`）、RLS policy、thumbnail storage bucket，以及 `request_song()` RPC。點歌的驗證（登入、暱稱、每日 10 首上限 `c_daily_limit`、已上傳/拒絕狀態、同歌合併計數）全在這個 RPC 內，並以 `raise exception '<code>'` 回傳錯誤代碼；`src/app/request/actions.ts` 的 `RPC_ERRORS` 把代碼對應成中文訊息，新增 RPC 錯誤代碼時兩邊要同步。改 migration 或 RLS 後要跑 `pnpm test:db`（它用最小的 Supabase auth/storage stub，不是真的 Supabase）。
 
 **Supabase client 有三種，不要混用**（`src/lib/supabase/`）：
 - `server.ts`：以使用者 cookie 帶 session 的 server client，受 RLS 約束，Server Component / Server Action 預設用這個。

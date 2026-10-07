@@ -22,8 +22,10 @@ IG 詩歌吉他帳的點歌網站。觀眾用詩歌本／補充本號碼或歌�
 
 1. 到 [supabase.com](https://supabase.com) 建立免費專案
 2. **SQL Editor** 依序執行：
-   1. `supabase/migrations/0001_init.sql`（資料表、權限、點歌 RPC、縮圖 bucket）
+   1. `supabase/migrations/` 裡的每個檔案，依檔名順序（`0001_init.sql`、`0002_...`）
    2. `supabase/seed.sql`（1,299 首詩歌目錄）
+
+   之後新增的 migration 只要執行新的那一個檔案即可。
 
 ### 2. 環境變數
 

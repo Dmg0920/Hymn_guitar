@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
@@ -9,7 +9,7 @@ const P = fileURLToPath(new URL('../..', import.meta.url));
 const db = new PGlite();
 
 // --- Supabase stubs ---
-await db.exec(`
+const STUBS = `
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
   create schema auth; create schema storage;
   grant usage on schema public, auth, storage to anon, authenticated;
@@ -22,9 +22,14 @@ await db.exec(`
   -- Supabase 預設會把 public schema 的表授權給 anon/authenticated，模擬這個預設
   alter default privileges in schema public grant all on tables to anon, authenticated;
   alter default privileges in schema public grant all on functions to anon, authenticated;
-`);
+`;
+await db.exec(STUBS);
 
-await db.exec(readFileSync(`${P}supabase/migrations/0001_init.sql`, 'utf8'));
+// 依檔名順序套用所有 migration（與在 SQL Editor 依序執行相同）
+const migrationsDir = `${P}supabase/migrations`;
+for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) {
+  await db.exec(readFileSync(`${migrationsDir}/${file}`, 'utf8'));
+}
 await db.exec(readFileSync(`${P}supabase/seed.sql`, 'utf8'));
 await db.exec(readFileSync(`${P}supabase/seed.sql`, 'utf8')); // 可重複執行
 
@@ -34,11 +39,21 @@ assert.deepEqual(count, { n: 1299, h: 786 });
 console.log('✓ migration + seed（兩次）成功，1299 首');
 
 // --- users ---
-// 模擬伺服器 createUser：username 在 app_metadata，nickname 在 user_metadata
-const mk = async ({ username, nickname } = {}) => (await one(
-  `insert into auth.users (raw_app_meta_data, raw_user_meta_data) values ($1, $2) returning id`,
-  [username ? { username } : {}, nickname ? { nickname } : {}],
-)).id;
+// 模擬 GoTrue admin createUser 的實際順序（internal/api/admin.go adminUserCreate）：
+// 先 INSERT（app_metadata 只有 provider），之後才 UPDATE 寫入呼叫端給的 app_metadata。
+const mk = async ({ username, nickname } = {}) => {
+  const { id } = await one(
+    `insert into auth.users (raw_app_meta_data, raw_user_meta_data) values ($1, $2) returning id`,
+    [{ provider: 'email', providers: ['email'] }, nickname ? { nickname } : {}],
+  );
+  if (username) {
+    await db.query(
+      `update auth.users set raw_app_meta_data = raw_app_meta_data || $2 where id = $1`,
+      [id, { username }],
+    );
+  }
+  return id;
+};
 const alice = await mk({ username: 'alice', nickname: '愛麗絲' });
 const bob = await mk({});                               // email OTP 使用者，沒暱稱
 const admin = await mk({ username: 'moses', nickname: '站長' });
@@ -156,5 +171,21 @@ await as(carol, async () => {
   await expectErr(db.query(`select request_song(null, $1)`, ['垃圾歌名']), /rate_limited/, '取消點歌不會重置每日上限');
   await expectErr(db.query(`select count(*) from request_log`), /permission denied/, '使用者碰不到 request_log');
 });
+
+// 0002 的回填：模擬已經只跑過 0001、帳號 username 為空的正式資料庫
+{
+  const legacy = new PGlite();
+  await legacy.exec(STUBS);
+  await legacy.exec(readFileSync(`${migrationsDir}/0001_init.sql`, 'utf8'));
+  const { id } = (await legacy.query(
+    `insert into auth.users (raw_app_meta_data) values ($1) returning id`,
+    [{ provider: 'email', providers: ['email'] }],
+  )).rows[0];
+  await legacy.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || $2 where id = $1`, [id, { username: 'legacy' }]);
+  assert.equal((await legacy.query(`select username from profiles`)).rows[0].username, null);
+  await legacy.exec(readFileSync(`${migrationsDir}/0002_username_from_app_metadata.sql`, 'utf8'));
+  assert.equal((await legacy.query(`select username from profiles`)).rows[0].username, 'legacy');
+  console.log('✓ 0002 會補上只跑過 0001 時註冊的帳號 username');
+}
 
 console.log('\nALL SQL CHECKS PASSED');
