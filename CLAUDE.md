@@ -42,6 +42,11 @@ pnpm catalog:build      # data/raw/*.txt → 重新產生 supabase/seed.sql
 
 **頁面結構**（`src/app/`）：`/`（最新 5 首）、`/request`、`/me`、`/admin` 皆採「`page.tsx` + 同資料夾 `actions.ts`（Server Actions）+ client form 元件」。Action 統一回傳 `FormState`（`src/lib/form-state.ts`），輸入驗證集中在 `src/lib/validation.ts`。
 
+**視覺語彙：「教會詩歌號碼板」＋「吉他六弦」。** 設計 token、`@utility`（`btn-primary`、`input`、`card`、`board`、`eyebrow`、`numeral`、`wrap*`…）與 keyframes 都在 `src/app/globals.css`；改色彩只動 `:root` 與暗色那一組變數。幾個慣例：
+- 深色「號碼板」（`.board`）在亮暗兩個主題都維持深色；號碼、拉丁字用 `numeral`（Fraunces），中文標題用 `font-serif`（Noto Serif TC）。
+- 表單控制項邊框用 `--field`（對底色 ≥ 3:1），裝飾分隔線才用 `--line` / `--line-strong`。改 token 後請重算對比度（文字 ≥ 4.5:1）。
+- 動效只用 CSS 與原生 API，不引入動畫套件；一律尊重 `prefers-reduced-motion`。捲動進場用 `Reveal`（首屏與 SSR 永遠可見），弦的互動在 `GuitarStrings`。
+- 日期一律走 `src/lib/format.ts`（固定台北時區），避免 server / client 時區不同造成 hydration 不一致。
 **詩歌目錄是產生出來的。** `data/raw/hymns.txt`（詩歌本，只有分類沒有歌名）與 `supplement.txt`（補充本）經 `scripts/catalog.mjs` 解析、`scripts/build-seed.mjs` 輸出 `supabase/seed.sql`。seed 可重複執行且不覆蓋後台補上的歌名。不要手改 `seed.sql`，改 raw 資料後重新 `pnpm catalog:build`。
 
 ## 注意

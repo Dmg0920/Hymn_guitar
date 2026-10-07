@@ -1,7 +1,9 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useId, useState } from 'react';
 import { FormMessage } from '@/components/FormMessage';
+import { Segmented } from '@/components/Segmented';
+import { SubmitButton } from '@/components/SubmitButton';
 import { INITIAL_FORM_STATE } from '@/lib/form-state';
 import { SITE } from '@/lib/site';
 import { NICKNAME_MAX, PASSWORD_MIN } from '@/lib/validation';
@@ -14,34 +16,24 @@ import {
 
 type Tab = 'signin' | 'signup' | 'email';
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'signin', label: '帳號登入' },
-  { id: 'signup', label: '註冊帳號' },
-  { id: 'email', label: 'Email 驗證碼' },
-];
+const TABS = [
+  { value: 'signin', label: '帳號登入' },
+  { value: 'signup', label: '註冊' },
+  { value: 'email', label: 'Email 驗證碼' },
+] as const satisfies readonly { value: Tab; label: string }[];
 
 export function LoginForms({ next }: { next: string }) {
+  const idPrefix = useId();
   const [tab, setTab] = useState<Tab>('signin');
 
   return (
-    <div className="card p-5">
-      <div role="tablist" className="mb-5 grid grid-cols-3 gap-1 rounded-full bg-paper p-1 text-sm">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            type="button"
-            aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
-            className={`rounded-full py-1.5 ${tab === t.id ? 'bg-card font-medium shadow-sm' : 'text-muted'}`}
-          >
-            {t.label}
-          </button>
-        ))}
+    <div className="card p-5 shadow-xl shadow-black/5 md:p-7">
+      <Segmented options={TABS} value={tab} onChange={setTab} idPrefix={idPrefix} label="登入方式" className="mb-6" />
+      <div role="tabpanel" id={`${idPrefix}-panel`} aria-labelledby={`${idPrefix}-tab-${tab}`}>
+        {tab === 'signin' && <SignInForm next={next} />}
+        {tab === 'signup' && <SignUpForm next={next} />}
+        {tab === 'email' && <EmailOtpForm next={next} />}
       </div>
-      {tab === 'signin' && <SignInForm next={next} />}
-      {tab === 'signup' && <SignUpForm next={next} />}
-      {tab === 'email' && <EmailOtpForm next={next} />}
     </div>
   );
 }
@@ -54,9 +46,7 @@ function SignInForm({ next }: { next: string }) {
       <Field label="帳號" name="username" autoComplete="username" />
       <Field label="密碼" name="password" type="password" autoComplete="current-password" />
       <FormMessage state={state} />
-      <button type="submit" disabled={pending} className="btn-primary w-full">
-        {pending ? '登入中…' : '登入'}
-      </button>
+      <SubmitButton pending={pending} idle="登入" busy="登入中…" />
       <p className="text-center text-xs text-muted">
         忘記密碼？請
         {SITE.instagramUrl ? (
@@ -92,9 +82,7 @@ function SignUpForm({ next }: { next: string }) {
       />
       <Field label="暱稱（顯示用）" name="nickname" maxLength={NICKNAME_MAX} />
       <FormMessage state={state} />
-      <button type="submit" disabled={pending} className="btn-primary w-full">
-        {pending ? '註冊中…' : '註冊並登入'}
-      </button>
+      <SubmitButton pending={pending} idle="註冊並登入" busy="註冊中…" />
     </form>
   );
 }
@@ -109,9 +97,7 @@ function EmailOtpForm({ next }: { next: string }) {
       <form action={sendAction} className="space-y-4">
         <Field label="Email" name="email" type="email" autoComplete="email" />
         <FormMessage state={sendState} />
-        <button type="submit" disabled={sending} className="btn-primary w-full">
-          {sending ? '寄送中…' : '寄驗證碼給我'}
-        </button>
+        <SubmitButton pending={sending} idle="寄驗證碼給我" busy="寄送中…" />
         <p className="text-center text-xs text-muted">第一次使用會自動建立帳號。</p>
       </form>
     );
@@ -132,20 +118,47 @@ function EmailOtpForm({ next }: { next: string }) {
         placeholder="6 位數字"
       />
       <FormMessage state={verifyState.error ? verifyState : sendState} />
-      <button type="submit" disabled={verifying} className="btn-primary w-full">
-        {verifying ? '驗證中…' : '登入'}
-      </button>
+      <SubmitButton pending={verifying} idle="登入" busy="驗證中…" />
     </form>
   );
 }
 
 type FieldProps = React.InputHTMLAttributes<HTMLInputElement> & { label: string; name: string };
 
-function Field({ label, name, ...inputProps }: FieldProps) {
+function Field({ label, name, type, ...inputProps }: FieldProps) {
+  const id = useId();
+  const [isVisible, setIsVisible] = useState(false);
+  // 非密碼欄位用 controlled：React 19 的 form action 結束後會 reset 表單，
+  // 送出失敗（帳號已被使用、密碼錯誤…）時不該把帳號、暱稱、email 洗掉。密碼則刻意讓它清空。
+  const [value, setValue] = useState('');
+  const isPassword = type === 'password';
+
   return (
-    <label className="block">
-      <span className="label">{label}</span>
-      <input name={name} required className="input" {...inputProps} />
-    </label>
+    <div>
+      <label htmlFor={id} className="label">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          name={name}
+          required
+          type={isPassword && isVisible ? 'text' : type}
+          className={`input ${isPassword ? 'pr-16' : ''}`}
+          {...(isPassword ? {} : { value, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value) })}
+          {...inputProps}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            aria-label={isVisible ? '隱藏密碼' : '顯示密碼'}
+            onClick={() => setIsVisible((v) => !v)}
+            className="absolute inset-y-0 right-1 my-1 rounded-xl px-3 text-xs font-medium text-muted transition-colors hover:text-accent"
+          >
+            {isVisible ? '隱藏' : '顯示'}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

@@ -60,28 +60,34 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
   const requesters = await loadRequesters(songs.map((s) => s.id));
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold">後台</h1>
+    <section className="wrap-medium space-y-8 pb-8 pt-12 md:pt-20">
+      <div>
+        <p className="eyebrow">Admin</p>
+        <h1 className="mt-4 font-serif text-5xl font-black tracking-wide md:text-6xl">後台</h1>
+      </div>
 
-      <form className="card flex flex-wrap gap-2 p-3">
-        <select name="book" defaultValue={qBook || 'hymn'} className="input w-auto">
+      <form className="card flex flex-wrap gap-2 p-3" role="search">
+        <select name="book" defaultValue={qBook || 'hymn'} aria-label="搜尋方式" className="input w-auto">
           <option value="hymn">{BOOK_LABELS.hymn}號碼</option>
           <option value="supplement">{BOOK_LABELS.supplement}號碼</option>
           <option value="title">歌名</option>
         </select>
-        <input name="q" defaultValue={q} placeholder="找任何一首歌來編輯" className="input min-w-0 flex-1" />
-        <button type="submit" className="btn-primary">
+        <input name="q" defaultValue={q} placeholder="找任何一首歌來編輯" aria-label="搜尋關鍵字" className="input min-w-0 flex-1" />
+        <button type="submit" className="btn-primary min-h-12">
           搜尋
         </button>
       </form>
 
       {!q && (
-        <nav className="flex flex-wrap gap-2 text-sm">
+        <nav aria-label="清單分類" className="flex flex-wrap gap-2 text-sm">
           {(Object.keys(VIEWS) as View[]).map((v) => (
             <Link
               key={v}
               href={`/admin?view=${v}`}
-              className={`rounded-full px-4 py-1.5 ${v === view ? 'bg-accent text-accent-ink' : 'border border-line bg-card'}`}
+              aria-current={v === view ? 'page' : undefined}
+              className={`inline-flex min-h-10 items-center rounded-full px-5 font-medium transition-colors duration-300 ${
+                v === view ? 'bg-accent text-accent-ink' : 'border border-field bg-card hover:border-accent hover:text-accent'
+              }`}
             >
               {VIEWS[v]}
             </Link>
@@ -91,12 +97,15 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
 
       {q && (
         <p className="text-sm text-muted">
-          「{q}」的搜尋結果・<Link href="/admin" className="text-accent">回到列表</Link>
+          「{q}」的搜尋結果・
+          <Link href="/admin" className="text-accent underline underline-offset-4">
+            回到列表
+          </Link>
         </p>
       )}
 
       {songs.length === 0 ? (
-        <p className="card p-6 text-center text-muted">沒有歌曲</p>
+        <p className="card px-6 py-14 text-center text-muted">沒有歌曲</p>
       ) : (
         <ul className="space-y-3">
           {songs.map((song) => (
@@ -106,7 +115,7 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
       )}
 
       <ResetPasswordForm />
-    </div>
+    </section>
   );
 }
 
