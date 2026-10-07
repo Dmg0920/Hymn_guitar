@@ -1,72 +1,486 @@
 @import "tailwindcss";
 
+/*
+ * 設計語彙：教會「詩歌號碼板」（黑底奶油色數字）＋ 吉他六弦。
+ * 暖紙色底、墨色字、單一強調色（亮色＝餘燼橘、暗色＝銅黃）。
+ */
+
 :root {
-  --paper: #faf7f2;
-  --card: #ffffff;
-  --ink: #292524;
-  --muted: #78716c;
-  --line: #e7e0d6;
-  --accent: #b45309;
-  --accent-ink: #ffffff;
-  --accent-soft: #fef3c7;
-  --danger: #b91c1c;
-  --ok: #15803d;
+  color-scheme: light dark;
+
+  --paper: #f2ece1;
+  --paper-2: #e8dfce;
+  --card: #faf6ee;
+  --ink: #1a1510;
+  --muted: #6b5f4f;
+  --line: #d8cdb9;
+  --line-strong: #bfb199; /* 裝飾用分隔線 */
+  --field: #857965; /* 表單控制項邊框：對底色至少 3:1（WCAG 1.4.11） */
+  --accent: #b3410b;
+  --accent-ink: #fff7ec;
+  --accent-soft: #f6e8d2;
+  --danger: #b3261e;
+  --ok: #1f7a3d;
+
+  /* 號碼板：兩個主題都維持深色 */
+  --board: #17120e;
+  --board-ink: #f4ead8;
+  --board-muted: #a8977c;
+  --brass: #eba94a;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* 視窗左緣到 .wrap 內容左緣的距離（72rem 欄寬置中 + 內距），讓欄內元素可以「滿版出血」 */
+  --gutter: max(1.25rem, calc((100vw - 72rem) / 2 + 1.25rem));
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: max(2rem, calc((100vw - 72rem) / 2 + 2rem));
+  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #1c1917;
-    --card: #262220;
-    --ink: #f5f5f4;
-    --muted: #a8a29e;
-    --line: #3a3532;
-    --accent: #f59e0b;
-    --accent-ink: #1c1917;
-    --accent-soft: #3b2a10;
-    --danger: #f87171;
-    --ok: #4ade80;
+    --paper: #12100d;
+    --paper-2: #1b1713;
+    --card: #1c1814;
+    --ink: #f1eadc;
+    --muted: #a39887;
+    --line: #2f2922;
+    --line-strong: #473e33;
+    --field: #7a6f60;
+    --accent: #f0a53a;
+    --accent-ink: #1a1208;
+    --accent-soft: #3a2810;
+    --danger: #ff8a80;
+    --ok: #6fdc8c;
   }
 }
 
 @theme inline {
   --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
   --color-card: var(--card);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-field: var(--field);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
   --color-ok: var(--ok);
+  --color-board: var(--board);
+  --color-board-ink: var(--board-ink);
+  --color-board-muted: var(--board-muted);
+  --color-brass: var(--brass);
+
   --font-sans: system-ui, -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  --font-serif: var(--font-serif-tc), "Songti TC", "Noto Serif CJK TC", "PMingLiU", serif;
+  --font-display: var(--font-fraunces), var(--font-serif-tc), "Songti TC", Georgia, serif;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
+  line-height: 1.7;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+  /* 中文斷行：盡量以詞為單位（不支援的瀏覽器會忽略 auto-phrase） */
+  word-break: auto-phrase;
+  line-break: strict;
 }
 
+/* 紙張顆粒：極淡，只增加質感，不影響對比。亮色用黑色雜訊、暗色用白色雜訊（各自一張 SVG，
+   不在全螢幕固定圖層上用 filter，避免低階手機捲動掉幀） */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-color-scheme: dark) {
+  body::before {
+    opacity: 0.07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* 放在 base layer：utilities（如 .input 的 outline:none）才能覆寫，不會出現雙層外框 */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+}
+
+/* ---------- 版面 ---------- */
+
+@utility wrap {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (min-width: 768px) {
+    padding-inline: 2rem;
+  }
+}
+
+@utility wrap-narrow {
+  width: 100%;
+  max-width: 40rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (min-width: 768px) {
+    padding-inline: 2rem;
+  }
+}
+
+@utility wrap-medium {
+  width: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (min-width: 768px) {
+    padding-inline: 2rem;
+  }
+}
+
+/* ---------- 文字 ---------- */
+
+@utility eyebrow {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  &::before {
+    content: "";
+    width: 1.75rem;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.6;
+  }
+}
+
+@utility numeral {
+  font-family: var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum", "tnum";
+  font-variation-settings: "opsz" 144;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- 元件 ---------- */
+
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding-inline: 1.4rem;
+  border-radius: 9999px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.4s var(--ease-out),
+    background-color 0.25s,
+    border-color 0.25s,
+    color 0.25s,
+    box-shadow 0.4s var(--ease-out),
+    filter 0.25s;
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }
 
 @utility btn-primary {
-  @apply btn bg-accent text-accent-ink hover:opacity-90;
+  @apply btn bg-accent text-accent-ink;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    0 10px 24px -12px color-mix(in oklab, var(--accent) 80%, transparent);
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    filter: brightness(1.07);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      0 16px 30px -12px color-mix(in oklab, var(--accent) 85%, transparent);
+  }
 }
 
 @utility btn-ghost {
-  @apply btn border border-line bg-card text-ink hover:border-accent;
+  @apply btn border border-field text-ink;
+  &:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-2px);
+  }
 }
 
 @utility input {
-  @apply w-full rounded-xl border border-line bg-card px-4 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-accent;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.875rem;
+  border: 1px solid var(--field);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 1rem; /* 16px 以上，iOS Safari 才不會在聚焦時放大頁面 */
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.3s var(--ease-out);
+  &::placeholder {
+    color: color-mix(in oklab, var(--muted) 75%, transparent);
+  }
+  &:hover {
+    border-color: color-mix(in oklab, var(--accent) 60%, var(--field));
+  }
+  &:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 18%, transparent);
+  }
 }
 
 @utility card {
-  @apply rounded-2xl border border-line bg-card;
+  border-radius: 1.25rem;
+  border: 1px solid var(--line);
+  background: var(--card);
 }
 
 @utility label {
-  @apply mb-1.5 block text-sm font-medium text-muted;
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* 號碼板：深色底、奶油色數字、細邊框，像教會牆上的詩歌號碼 */
+@utility board {
+  position: relative;
+  border-radius: 1.5rem;
+  color: var(--board-ink);
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgb(255 244 224 / 0.07), transparent 60%),
+    var(--board);
+  border: 1px solid rgb(255 244 224 / 0.1);
+  box-shadow:
+    inset 0 0 0 4px var(--board),
+    inset 0 0 0 5px rgb(255 244 224 / 0.07),
+    0 40px 70px -40px rgb(20 10 0 / 0.55);
+}
+
+/* 五線譜：用來當分隔線 */
+@utility staff {
+  height: 1.25rem;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--line-strong) 0,
+    var(--line-strong) 1px,
+    transparent 1px,
+    transparent 0.3125rem
+  );
+  opacity: 0.7;
+}
+
+/* ---------- 動效 ---------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes line-in {
+  from {
+    transform: translateY(105%) rotate(2deg);
+  }
+  to {
+    transform: translateY(0) rotate(0);
+  }
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes ping-soft {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  80%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes string-wave {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes shake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
+}
+
+@utility animate-shake {
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@utility animate-rise {
+  animation: rise 0.7s var(--ease-out) backwards;
+  animation-delay: var(--delay, 0ms);
+}
+
+@utility animate-fade {
+  animation: fade-in 0.5s ease-out backwards;
+  animation-delay: var(--delay, 0ms);
+}
+
+@utility animate-pop {
+  animation: pop 0.55s var(--ease-out) backwards;
+}
+
+@utility skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--line) 30%,
+    color-mix(in oklab, var(--line) 40%, var(--card)) 50%,
+    var(--line) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* 捲動進場：只有首屏以下的元素會被 Reveal 元件標記為 hidden，首屏與無 JS 時一律可見 */
+[data-reveal] {
+  transition:
+    opacity 0.9s var(--ease-out),
+    transform 0.9s var(--ease-out);
+  transition-delay: var(--delay, 0ms);
+}
+[data-reveal="hidden"] {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+  [data-reveal="hidden"] {
+    opacity: 1;
+    transform: none;
+  }
 }

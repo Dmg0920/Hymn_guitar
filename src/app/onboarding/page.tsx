@@ -14,10 +14,13 @@ export default async function OnboardingPage({ searchParams }: PageProps<'/onboa
   if (!viewer) redirect(`/login?next=${encodeURIComponent('/onboarding')}`);
 
   return (
-    <div className="mx-auto max-w-sm">
-      <h1 className="mb-2 text-center text-xl font-bold">設定暱稱</h1>
-      <p className="mb-6 text-center text-sm text-muted">點歌時會顯示這個名字。</p>
-      <NicknameForm next={nextPath} defaultValue={viewer.nickname ?? ''} />
-    </div>
+    <section className="wrap-narrow pb-8 pt-12 md:pt-20">
+      <p className="eyebrow">Nickname</p>
+      <h1 className="mt-4 font-serif text-5xl font-black tracking-wide md:text-6xl">怎麼稱呼你？</h1>
+      <p className="mt-4 text-balance text-muted">點歌時會顯示這個名字。</p>
+      <div className="mt-8">
+        <NicknameForm next={nextPath} defaultValue={viewer.nickname ?? ''} />
+      </div>
+    </section>
   );
 }
