@@ -1,0 +1,113 @@
+// 純函式的輸入驗證，前後端共用（server action 一律再驗一次）。
+
+export const NICKNAME_MAX = 20;
+export const MESSAGE_MAX = 100;
+export const TITLE_MAX = 50;
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 72;
+
+const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const OTP_PATTERN = /^\d{6,10}$/;
+const POST_URL_HOSTS = new Set([
+  'instagram.com',
+  'www.instagram.com',
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'youtu.be',
+]);
+
+export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+
+const ok = <T>(value: T): Parsed<T> => ({ ok: true, value });
+const fail = <T>(error: string): Parsed<T> => ({ ok: false, error });
+
+/** 全形數字轉半形，方便中文輸入法使用者。 */
+export function toHalfWidthDigits(raw: string): string {
+  return raw.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+}
+
+export function parseUsername(raw: unknown): Parsed<string> {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return USERNAME_PATTERN.test(value)
+    ? ok(value)
+    : fail('帳號需為 3–20 個英文小寫、數字或底線');
+}
+
+export function parsePassword(raw: unknown): Parsed<string> {
+  const value = String(raw ?? '');
+  if (value.length < PASSWORD_MIN) return fail(`密碼至少 ${PASSWORD_MIN} 個字元`);
+  if (value.length > PASSWORD_MAX) return fail(`密碼最多 ${PASSWORD_MAX} 個字元`);
+  return ok(value);
+}
+
+export function parseNickname(raw: unknown): Parsed<string> {
+  const value = String(raw ?? '').trim();
+  if (value.length === 0) return fail('請輸入暱稱');
+  if (value.length > NICKNAME_MAX) return fail(`暱稱最多 ${NICKNAME_MAX} 個字`);
+  return ok(value);
+}
+
+export function parseEmail(raw: unknown): Parsed<string> {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return EMAIL_PATTERN.test(value) ? ok(value) : fail('Email 格式不正確');
+}
+
+export function parseOtp(raw: unknown): Parsed<string> {
+  const value = toHalfWidthDigits(String(raw ?? '')).replace(/\s/g, '');
+  return OTP_PATTERN.test(value) ? ok(value) : fail('請輸入信中的數字驗證碼');
+}
+
+export function parseOptionalText(raw: unknown, max: number, label: string): Parsed<string | null> {
+  const value = String(raw ?? '').trim();
+  if (value.length === 0) return ok(null);
+  if (value.length > max) return fail(`${label}最多 ${max} 個字`);
+  return ok(value);
+}
+
+/** 只接受 IG / YouTube 的 https 連結，避免 javascript: 之類的網址。 */
+export function parsePostUrl(raw: unknown): Parsed<string | null> {
+  const value = String(raw ?? '').trim();
+  if (value.length === 0) return ok(null);
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return fail('連結格式不正確');
+  }
+  if (url.protocol !== 'https:' || !POST_URL_HOSTS.has(url.hostname)) {
+    return fail('請貼 Instagram 或 YouTube 的 https 連結');
+  }
+  return ok(url.toString());
+}
+
+/**
+ * 正規化詩歌號碼：詩歌本接受「384」「附1」；補充本接受「101」「0101」。
+ * 是否真的存在由資料庫查詢決定。
+ */
+export function parseSongCode(book: 'hymn' | 'supplement', raw: unknown): Parsed<string> {
+  const value = toHalfWidthDigits(String(raw ?? '')).replace(/\s/g, '');
+  const appendix = value.match(/^附(\d+)$/);
+  if (book === 'hymn' && appendix) return ok(`附${Number(appendix[1])}`);
+  if (/^\d{1,4}$/.test(value) && Number(value) > 0) return ok(String(Number(value)));
+  return fail(book === 'hymn' ? '請輸入詩歌號碼（例如 384 或 附1）' : '請輸入補充本號碼（例如 101）');
+}
+
+/** 登入後導回的路徑，只允許站內相對路徑，防止 open redirect。 */
+export function safeNextPath(raw: unknown): string {
+  const value = String(raw ?? '');
+  // 瀏覽器解析網址前會移除 tab / 換行，'\' 也會被當成 '/'，所以一律拒絕
+  if (!value.startsWith('/') || /[\u0000-\u001f\u007f\\]/.test(value)) return '/';
+
+  const base = 'http://same-origin.invalid';
+  const url = new URL(value, base);
+  if (url.origin !== base) return '/';
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+/** 給 PostgREST ilike 用：跳脫 % _ \ 這些萬用字元。 */
+export function escapeLikePattern(raw: string): string {
+  return raw.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
