@@ -72,6 +72,21 @@ update public.profiles set is_admin = true where username = '你的帳號';
 
 在 Vercel 匯入這個 repo，把 `.env.local` 的三個變數加到 **Environment Variables**，然後部署。最後把網址設成 Supabase 的 Site URL，並放到 IG 個人檔案的連結。
 
+### 6. 點歌提醒（Telegram，選用）
+
+每天 21:00（台北時間）由 Vercel Cron 呼叫 `/api/cron/request-digest`，把前一次通知之後新增的點歌整理成一則 Telegram 訊息；沒有新點歌就不發。不設定也不影響網站其他功能。
+
+1. 在 Supabase SQL Editor 執行 `supabase/migrations/0005_notification_state.sql`（記錄通知到哪一筆；從執行當下開始算，不會把舊的點歌推給你）
+2. Telegram 搜尋 **@BotFather** → `/newbot` → 照指示取名，拿到 **bot token**
+3. 在 Telegram 對你的新 bot 隨便傳一句話，然後開啟 `https://api.telegram.org/bot<token>/getUpdates`，找到 `"chat":{"id":123456789,...}`，那個數字就是 **chat id**
+4. 在 Vercel **Environment Variables** 加上（`.env.example` 有範例）：
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_CHAT_ID`
+   - `CRON_SECRET`：自己產生一串長隨機字串（例如 `openssl rand -hex 32`）。沒設的話端點會拒絕所有請求
+5. 重新部署。想立刻測試：在 Vercel 專案的 **Settings → Cron Jobs** 按 Run，或本機 `curl -H "Authorization: Bearer <CRON_SECRET>" <網址>/api/cron/request-digest`
+
+要改時間：改 `vercel.json` 的 `schedule`（cron 以 UTC 計算，`0 13 * * *` = 台北 21:00）。Vercel Hobby 方案一天只能跑一次；Telegram 發送失敗時不會推進進度，隔天會一起補發。
+
 ## 日常使用（後台）
 
 1. 「待處理」分頁：依點播數排序
@@ -108,6 +123,7 @@ pnpm lint && pnpm typecheck
 
 - **註冊沒有 captcha 或頻率限制**：帳號密碼註冊走伺服器端的 admin API，會略過 Supabase 內建的註冊限制。有人用腳本大量註冊時，可以在 Supabase Dashboard 刪除帳號；如果真的被濫用，再加 Cloudflare Turnstile。
 - **Email 驗證碼的寄信額度是全站共用的**：所有請求都從伺服器發出，Supabase 會把它們當成同一個來源計算頻率限制。
+- **點歌提醒只彙整「通知時還在的點歌」**：使用者在通知前就取消的點歌不會出現；已點過的歌再點一次（只改留言）不算新的一筆。
 - **詩歌本沒有歌名**：目前顯示分類，歌名在後台補上。
 - 帳號密碼註冊使用 `.invalid` 網域的內部 email。這只在本機用 PGlite 測過，還沒在真的 Supabase 上驗證。第一次部署後請先實際註冊一個帳號試試看。
 
