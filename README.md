@@ -74,7 +74,7 @@ update public.profiles set is_admin = true where username = '你的帳號';
 
 ### 6. 點歌提醒（Telegram，選用）
 
-每天 13:30（台北時間）由 Vercel Cron 呼叫 `/api/cron/request-digest`，把前一次通知之後新增的點歌整理成一則 Telegram 訊息；沒有新點歌就不發。不設定也不影響網站其他功能。
+每天 13:30（台北時間）由 Vercel Cron 呼叫 `/api/cron/request-digest`，把前一次通知之後新增的點歌與意見箱留言整理成一則 Telegram 訊息；兩者都沒有就不發。點歌與意見各自記錄通知進度；意見箱的進度在部署後第一次執行時才建立（從當下算起），所以部署前累積的舊意見不會一次推出來。不設定也不影響網站其他功能。
 
 1. 在 Supabase SQL Editor 執行 `supabase/migrations/0005_notification_state.sql`（記錄通知到哪一筆；從執行當下開始算，不會把舊的點歌推給你）
 2. Telegram 搜尋 **@BotFather** → `/newbot` → 照指示取名，拿到 **bot token**
