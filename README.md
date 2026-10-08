@@ -101,12 +101,12 @@ pnpm lint && pnpm typecheck
 ```
 
 - `pnpm test`：目錄解析、輸入驗證的單元測試
-- `pnpm test:db`：用 PGlite（WASM Postgres）跑 migration + seed，驗證 RLS、`request_song()`、constraint
+- `pnpm test:db`：用 PGlite（WASM Postgres）跑 migration + seed，驗證 RLS、`request_song()`、`register_signup_attempt()`、constraint
 - 帳號密碼註冊的帳號，在 Supabase Auth 裡是 `帳號@users.hymn-guitar.invalid` 這種內部 email（不會寄信），網域可以用 `USERNAME_EMAIL_DOMAIN` 改。
 
 ## 已知限制
 
-- **註冊沒有 captcha 或頻率限制**：帳號密碼註冊走伺服器端的 admin API，會略過 Supabase 內建的註冊限制。有人用腳本大量註冊時，可以在 Supabase Dashboard 刪除帳號；如果真的被濫用，再加 Cloudflare Turnstile。
+- **註冊只有頻率限制，沒有 captcha**：帳號密碼註冊走 admin API，會略過 Supabase 內建限制，所以由 `register_signup_attempt()`（`0005_signup_rate_limit.sql`）依 IP 每小時 10 次、全站每小時 200 次計數（只存 IP 的 HMAC）。這擋得住單一腳本，擋不住大量不同 IP 的分散式攻擊；真的被濫用時再加 Cloudflare Turnstile。需要先在 SQL Editor 執行 0005，否則註冊會一律失敗。
 - **Email 驗證碼的寄信額度是全站共用的**：所有請求都從伺服器發出，Supabase 會把它們當成同一個來源計算頻率限制。
 - **詩歌本沒有歌名**：目前顯示分類，歌名在後台補上。
 - 帳號密碼註冊使用 `.invalid` 網域的內部 email。這只在本機用 PGlite 測過，還沒在真的 Supabase 上驗證。第一次部署後請先實際註冊一個帳號試試看。

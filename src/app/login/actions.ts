@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { isUsernameEmail, usernameToEmail } from '@/lib/auth';
 import type { FormState } from '@/lib/form-state';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { passSignupGate } from '@/lib/signup-guard';
 import { createClient } from '@/lib/supabase/server';
 import {
   parseEmail,
@@ -38,6 +39,12 @@ export async function signUpWithPassword(_: FormState, formData: FormData): Prom
   if (!password.ok) return { error: password.error };
   const nickname = parseNickname(formData.get('nickname'));
   if (!nickname.ok) return { error: nickname.error };
+
+  // 驗證通過後、建立帳號前先檢查頻率（admin API 不受 Supabase 內建限制約束）
+  const gate = await passSignupGate();
+  if (!gate.ok) {
+    return { error: gate.reason === 'rate_limited' ? '註冊太頻繁，請稍後再試' : GENERIC_ERROR };
+  }
 
   const email = usernameToEmail(username.value);
   const admin = createAdminClient();

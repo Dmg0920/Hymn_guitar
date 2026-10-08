@@ -51,4 +51,4 @@ pnpm catalog:build      # data/raw/*.txt → 重新產生 supabase/seed.sql
 
 ## 注意
 
-- 帳號密碼註冊走 admin API，目前沒有 captcha／頻率限制（README「已知限制」），且 `.invalid` 內部 email 流程尚未在真實 Supabase 驗證過。
+- 帳號密碼註冊走 admin API，會略過 Supabase 內建限制，所以 `signUpWithPassword` 在 `createUser` 前先過 `passSignupGate()`（`register_signup_attempt()` RPC，依 IP／全站計數，只有 service_role 可呼叫；失敗一律拒絕）。目前沒有 captcha，且 `.invalid` 內部 email 流程尚未在真實 Supabase 驗證過（README「已知限制」）。

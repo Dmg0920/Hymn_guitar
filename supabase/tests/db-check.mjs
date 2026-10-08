@@ -213,6 +213,37 @@ await as(carol, async () => {
   console.log('✓ 意見箱：RPC 驗證、RLS、每日上限、admin 可刪');
 }
 
+// 註冊頻率限制（0005）：只有 service_role 能呼叫，依 IP 與全站計數
+{
+  const asRole = async (role, fn) => {
+    await db.exec(`set role ${role}`);
+    try { return await fn(); } finally { await db.exec(`reset role`); }
+  };
+  const attempt = (ip) => db.query(`select register_signup_attempt($1)`, [ip]);
+  await asRole('anon', () => expectErr(attempt('ip-a'), /permission denied/, 'anon 不能呼叫註冊額度 RPC'));
+  await as(alice, () => expectErr(attempt('ip-a'), /permission denied/, '登入使用者不能呼叫註冊額度 RPC'));
+  await as(alice, () => expectErr(db.query(`select count(*) from signup_log`), /permission denied/, '使用者碰不到 signup_log'));
+  await asRole('service_role', async () => {
+    await expectErr(attempt(''), /invalid_ip/, '空的 IP hash 被擋');
+    for (let i = 0; i < 10; i++) await attempt('ip-a');
+    await expectErr(attempt('ip-a'), /rate_limited/, '同一 IP 每小時最多 10 次');
+    await attempt('ip-b');
+    console.log('✓ 不同 IP 的額度互相獨立');
+  });
+  // 一小時前的紀錄不計入單 IP 額度；一天前的紀錄被清掉
+  await db.query(`update signup_log set created_at = now() - interval '2 hours' where ip_hash = 'ip-a'`);
+  await asRole('service_role', () => attempt('ip-a'));
+  await db.query(`update signup_log set created_at = now() - interval '2 days' where ip_hash = 'ip-b'`);
+  await asRole('service_role', () => attempt('ip-c'));
+  assert.equal((await one(`select count(*)::int n from signup_log where ip_hash = 'ip-b'`)).n, 0);
+  console.log('✓ 超過一小時的紀錄不計入額度，超過一天的紀錄被清除');
+  // 全站上限：200 次後任何 IP 都被擋
+  await db.query(`delete from signup_log`);
+  await db.query(`insert into signup_log (ip_hash) select 'bot-' || g from generate_series(1, 200) g`);
+  await asRole('service_role', () => expectErr(attempt('fresh-ip'), /rate_limited/, '全站每小時 200 次上限'));
+  await db.query(`delete from signup_log`);
+}
+
 // 0002 的回填：模擬已經只跑過 0001、帳號 username 為空的正式資料庫
 {
   const legacy = new PGlite();
