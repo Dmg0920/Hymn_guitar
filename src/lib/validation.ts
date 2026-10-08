@@ -4,12 +4,15 @@ export const NICKNAME_MAX = 20;
 export const MESSAGE_MAX = 100;
 export const TITLE_MAX = 50;
 export const FEEDBACK_MAX = 500;
+export const BIO_MAX = 150;
+export const FAVORITES_MAX = 5;
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 72;
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_PATTERN = /^\d{6,10}$/;
+const INSTAGRAM_PATTERN = /^[a-z0-9._]{1,30}$/;
 const POST_URL_HOSTS = new Set([
   'instagram.com',
   'www.instagram.com',
@@ -72,6 +75,41 @@ export function parseFeedback(raw: unknown): Parsed<string> {
   if (value.length === 0) return fail('請輸入想說的話');
   if (value.length > FEEDBACK_MAX) return fail(`意見最多 ${FEEDBACK_MAX} 個字`);
   return ok(value);
+}
+
+export function parseBio(raw: unknown): Parsed<string | null> {
+  // 統一換行、最多連續一個空行，避免用大量換行撐開版面
+  const value = String(raw ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (value.length === 0) return ok(null);
+  if (value.length > BIO_MAX) return fail(`自介最多 ${BIO_MAX} 個字`);
+  return ok(value);
+}
+
+/** 接受「name」「@name」或 instagram.com/name 網址，統一成小寫的 name；空字串代表不填。 */
+export function parseInstagram(raw: unknown): Parsed<string | null> {
+  let value = String(raw ?? '').trim().toLowerCase();
+  if (value.length === 0) return ok(null);
+
+  const fromUrl = value.match(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\/([^/?#]+)\/?(?:[?#].*)?$/);
+  if (fromUrl) value = fromUrl[1];
+  value = value.replace(/^@/, '');
+
+  if (!INSTAGRAM_PATTERN.test(value) || value.endsWith('.')) {
+    return fail('IG 帳號只能有英文字母、數字、底線和句點（最多 30 字）');
+  }
+  return ok(value);
+}
+
+/** 最愛詩歌的 song id 清單（保留順序）：最多 FAVORITES_MAX 首、不重複、都是正整數。 */
+export function parseFavoriteIds(raw: unknown[]): Parsed<number[]> {
+  const ids = raw.map((v) => Number(v));
+  if (ids.some((id) => !Number.isInteger(id) || id <= 0)) return fail('歌曲 ID 不正確');
+  if (new Set(ids).size !== ids.length) return fail('最愛不能重複');
+  if (ids.length > FAVORITES_MAX) return fail(`最愛最多 ${FAVORITES_MAX} 首`);
+  return ok(ids);
 }
 
 /** 只接受 IG / YouTube 的 https 連結，避免 javascript: 之類的網址。 */

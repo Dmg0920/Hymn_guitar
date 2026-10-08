@@ -1,9 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  BIO_MAX,
   FEEDBACK_MAX,
   escapeLikePattern,
+  parseBio,
+  parseFavoriteIds,
   parseFeedback,
+  parseInstagram,
   parseNickname,
   parseOtp,
   parsePostUrl,
@@ -73,4 +77,31 @@ test('parseFeedback：去頭尾空白、擋空白與過長', () => {
   assert.equal(parseFeedback(null).ok, false);
   assert.equal(parseFeedback('一'.repeat(FEEDBACK_MAX)).ok, true);
   assert.equal(parseFeedback('一'.repeat(FEEDBACK_MAX + 1)).ok, false);
+});
+
+test('parseBio：空白視為不填、正規化換行、限制長度', () => {
+  assert.deepEqual(parseBio('  \n '), { ok: true, value: null });
+  assert.deepEqual(parseBio(' 你好\r\n\r\n\r\n\r\n世界 '), { ok: true, value: '你好\n\n世界' });
+  assert.equal(parseBio('字'.repeat(BIO_MAX)).ok, true);
+  assert.equal(parseBio('字'.repeat(BIO_MAX + 1)).ok, false);
+});
+
+test('parseInstagram：接受 name、@name、網址，統一成小寫', () => {
+  assert.deepEqual(parseInstagram(''), { ok: true, value: null });
+  assert.deepEqual(parseInstagram(' @Hymn.Guitar_1 '), { ok: true, value: 'hymn.guitar_1' });
+  assert.deepEqual(parseInstagram('https://www.instagram.com/hymn_guitar/'), { ok: true, value: 'hymn_guitar' });
+  assert.deepEqual(parseInstagram('instagram.com/hymn_guitar?igsh=abc'), { ok: true, value: 'hymn_guitar' });
+  assert.equal(parseInstagram('has space').ok, false);
+  assert.equal(parseInstagram('https://evil.example/hymn').ok, false);
+  assert.equal(parseInstagram('a'.repeat(31)).ok, false);
+  assert.equal(parseInstagram('name.').ok, false);
+});
+
+test('parseFavoriteIds：最多 5 首、不重複、正整數', () => {
+  assert.deepEqual(parseFavoriteIds([]), { ok: true, value: [] });
+  assert.deepEqual(parseFavoriteIds(['3', '1']), { ok: true, value: [3, 1] });
+  assert.equal(parseFavoriteIds(['1', '1']).ok, false);
+  assert.equal(parseFavoriteIds(['0']).ok, false);
+  assert.equal(parseFavoriteIds(['x']).ok, false);
+  assert.equal(parseFavoriteIds([1, 2, 3, 4, 5, 6]).ok, false);
 });

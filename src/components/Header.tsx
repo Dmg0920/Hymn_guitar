@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { unstable_rethrow } from 'next/navigation';
 import { getViewer, type Viewer } from '@/lib/auth';
+import { avatarPublicUrl } from '@/lib/avatar';
 import { SITE } from '@/lib/site';
 import { AccountMenu } from './AccountMenu';
 import { LogoMark } from './LogoMark';
@@ -28,7 +29,7 @@ export async function Header() {
         <NavLink href="/request">點歌</NavLink>
 
         {viewer ? (
-          <AccountMenu nickname={viewer.nickname} isAdmin={viewer.isAdmin} />
+          <AccountMenu nickname={viewer.nickname} avatarUrl={avatarPublicUrl(viewer.avatarPath)} isAdmin={viewer.isAdmin} />
         ) : (
           <Link href="/login" className="btn-primary min-h-10 px-5">
             登入

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
+import { avatarPublicUrl } from '@/lib/avatar';
 import { BOOK_LABELS, SONG_COLUMNS, STATUS_LABELS, type Song } from '@/lib/songs';
 import { createClient } from '@/lib/supabase/server';
 import { escapeLikePattern, parseSongCode } from '@/lib/validation';
@@ -158,17 +159,28 @@ async function loadRequesters(songIds: number[]): Promise<Map<number, Requester[
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('requests')
-    .select('song_id, message, created_at, profiles(nickname)')
+    .select('song_id, message, created_at, profiles(nickname, avatar_path, ig_handle)')
     .in('song_id', songIds)
     .order('created_at', { ascending: false });
   if (error) throw new Error(`讀取點歌者失敗：${error.message}`);
 
-  type Row = { song_id: number; message: string | null; created_at: string; profiles: { nickname: string | null } | null };
+  type Row = {
+    song_id: number;
+    message: string | null;
+    created_at: string;
+    profiles: { nickname: string | null; avatar_path: string | null; ig_handle: string | null } | null;
+  };
   for (const row of (data ?? []) as unknown as Row[]) {
     const list = result.get(row.song_id) ?? [];
     result.set(row.song_id, [
       ...list,
-      { nickname: row.profiles?.nickname ?? '（未設定）', message: row.message, createdAt: row.created_at },
+      {
+        nickname: row.profiles?.nickname ?? '（未設定）',
+        avatarUrl: avatarPublicUrl(row.profiles?.avatar_path),
+        igHandle: row.profiles?.ig_handle ?? null,
+        message: row.message,
+        createdAt: row.created_at,
+      },
     ]);
   }
   return result;

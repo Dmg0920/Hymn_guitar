@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { Avatar } from '@/components/Avatar';
 import { FormMessage } from '@/components/FormMessage';
 import { SongThumbnail } from '@/components/SongThumbnail';
 import { SubmitButton } from '@/components/SubmitButton';
@@ -11,7 +12,13 @@ import { createClient } from '@/lib/supabase/client';
 import { TITLE_MAX } from '@/lib/validation';
 import { updateSong } from './actions';
 
-export type Requester = { nickname: string; message: string | null; createdAt: string };
+export type Requester = {
+  nickname: string;
+  avatarUrl: string | null;
+  igHandle: string | null;
+  message: string | null;
+  createdAt: string;
+};
 
 const THUMBNAIL_BUCKET = 'thumbnails';
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
@@ -64,12 +71,25 @@ export function AdminSongRow({ song, requesters }: Props) {
       {requesters.length > 0 && (
         <details className="text-sm">
           <summary className="cursor-pointer text-muted transition-colors hover:text-ink">誰點了這首</summary>
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-2 space-y-2">
             {requesters.map((r, i) => (
-              <li key={i}>
-                <span className="font-medium">{r.nickname}</span>
-                <span className="ml-2 text-xs text-muted">{formatDate(r.createdAt)}</span>
-                {r.message && <span className="ml-2 text-muted">「{r.message}」</span>}
+              <li key={i} className="flex items-center gap-2">
+                <Avatar src={r.avatarUrl} nickname={r.nickname} className="size-7" />
+                <p className="min-w-0">
+                  <span className="font-medium">{r.nickname}</span>
+                  {r.igHandle && (
+                    <a
+                      href={`https://www.instagram.com/${r.igHandle}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 text-xs text-accent underline-offset-4 hover:underline"
+                    >
+                      @{r.igHandle}
+                    </a>
+                  )}
+                  <span className="ml-2 text-xs text-muted">{formatDate(r.createdAt)}</span>
+                  {r.message && <span className="ml-2 text-muted">「{r.message}」</span>}
+                </p>
               </li>
             ))}
           </ul>
