@@ -74,7 +74,7 @@ update public.profiles set is_admin = true where username = '你的帳號';
 
 ### 6. 點歌提醒（Telegram，選用）
 
-每天 21:00（台北時間）由 Vercel Cron 呼叫 `/api/cron/request-digest`，把前一次通知之後新增的點歌整理成一則 Telegram 訊息；沒有新點歌就不發。不設定也不影響網站其他功能。
+每天 13:30（台北時間）由 Vercel Cron 呼叫 `/api/cron/request-digest`，把前一次通知之後新增的點歌整理成一則 Telegram 訊息；沒有新點歌就不發。不設定也不影響網站其他功能。
 
 1. 在 Supabase SQL Editor 執行 `supabase/migrations/0005_notification_state.sql`（記錄通知到哪一筆；從執行當下開始算，不會把舊的點歌推給你）
 2. Telegram 搜尋 **@BotFather** → `/newbot` → 照指示取名，拿到 **bot token**
@@ -85,7 +85,7 @@ update public.profiles set is_admin = true where username = '你的帳號';
    - `CRON_SECRET`：自己產生一串長隨機字串（例如 `openssl rand -hex 32`）。沒設的話端點會拒絕所有請求
 5. 重新部署。想立刻測試：在 Vercel 專案的 **Settings → Cron Jobs** 按 Run，或本機 `curl -H "Authorization: Bearer <CRON_SECRET>" <網址>/api/cron/request-digest`
 
-要改時間：改 `vercel.json` 的 `schedule`（cron 以 UTC 計算，`0 13 * * *` = 台北 21:00）。Vercel Hobby 方案一天只能跑一次；Telegram 發送失敗時不會推進進度，隔天會一起補發。
+要改時間：改 `vercel.json` 的 `schedule`（cron 以 UTC 計算，`30 5 * * *` = 台北 13:30）。Vercel Hobby 方案一天只能跑一次；Telegram 發送失敗時不會推進進度，隔天會一起補發。
 
 ## 日常使用（後台）
 
