@@ -7,15 +7,20 @@ import { Reveal } from '@/components/Reveal';
 import { requireViewer } from '@/lib/auth';
 import { avatarPublicUrl } from '@/lib/avatar';
 import { computeBadges } from '@/lib/badges';
+import { todayInTaipei } from '@/lib/format';
+import { isUnseenUpload } from '@/lib/notifications';
 import { loadFavoriteSongs } from '@/lib/profile';
+import { loadPracticingQueue } from '@/lib/queue';
+import { describeEta, rankById } from '@/lib/schedule';
 import { SONG_COLUMNS, type Song } from '@/lib/songs';
 import { createClient } from '@/lib/supabase/server';
+import { markAllUploadsSeen } from './actions';
 import { CopyLinkButton } from './CopyLinkButton';
-import { RequestItem } from './RequestItem';
+import { RequestItem, type QueuePlace } from './RequestItem';
 
 export const metadata: Metadata = { title: '我的檔案' };
 
-type MyRequest = { message: string | null; created_at: string; songs: Song };
+type MyRequest = { message: string | null; created_at: string; seen_at: string | null; songs: Song };
 
 export default async function MyProfilePage() {
   const viewer = await requireViewer('/me');
@@ -29,7 +34,7 @@ export default async function MyProfilePage() {
       .single(),
     supabase
       .from('requests')
-      .select(`message, created_at, songs!inner(${SONG_COLUMNS})`)
+      .select(`message, created_at, seen_at, songs!inner(${SONG_COLUMNS})`)
       .eq('user_id', viewer.id)
       .order('created_at', { ascending: false }),
     loadFavoriteSongs(viewer.id),
@@ -38,6 +43,9 @@ export default async function MyProfilePage() {
   if (requestsResult.error) throw new Error(`讀取點歌紀錄失敗：${requestsResult.error.message}`);
   const profile = profileResult.data;
   const requests = (requestsResult.data ?? []) as unknown as MyRequest[];
+
+  const unseenCount = requests.filter((r) => isUnseenUpload({ seen_at: r.seen_at, status: r.songs.status })).length;
+  const queuePlaces = await loadQueuePlaces(supabase, requests);
 
   const requestTotal = requests.length;
   const uploadedTotal = requests.filter((r) => r.songs.status === 'uploaded').length;
@@ -115,6 +123,19 @@ export default async function MyProfilePage() {
           )}
         </div>
 
+        {unseenCount > 0 && (
+          <div role="status" className="card mt-5 flex flex-wrap items-center justify-between gap-3 border-accent bg-accent-soft px-5 py-4">
+            <p className="font-medium">
+              你點的歌有 <span className="numeral text-2xl font-medium text-accent">{unseenCount}</span> 首已經上傳了
+            </p>
+            <form action={markAllUploadsSeen}>
+              <button type="submit" className="min-h-10 text-sm text-muted underline-offset-4 transition-colors hover:text-ink hover:underline">
+                全部標示為已讀
+              </button>
+            </form>
+          </div>
+        )}
+
         {requests.length === 0 ? (
           <div className="card mt-5 flex flex-col items-center gap-5 px-6 py-14 text-center">
             <p className="numeral text-6xl font-medium italic leading-none text-line-strong">♪</p>
@@ -125,9 +146,15 @@ export default async function MyProfilePage() {
           </div>
         ) : (
           <ul className="mt-5 space-y-4 md:mt-6">
-            {requests.map(({ songs: song, message, created_at }, i) => (
+            {requests.map(({ songs: song, message, created_at, seen_at }, i) => (
               <Reveal key={song.id} as="li" delay={Math.min(i, 5) * 70}>
-                <RequestItem song={song} message={message} createdAt={created_at} />
+                <RequestItem
+                  song={song}
+                  message={message}
+                  createdAt={created_at}
+                  isUnseen={isUnseenUpload({ seen_at, status: song.status })}
+                  queuePlace={queuePlaces.get(song.id)}
+                />
               </Reveal>
             ))}
           </ul>
@@ -135,4 +162,23 @@ export default async function MyProfilePage() {
       </div>
     </section>
   );
+}
+
+/** 練習中的點歌在排隊順序裡的位置。排程只是附加資訊：讀取失敗就不顯示，不影響點歌紀錄。 */
+async function loadQueuePlaces(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  requests: MyRequest[],
+): Promise<Map<number, QueuePlace>> {
+  const places = new Map<number, QueuePlace>();
+  if (!requests.some((r) => r.songs.status === 'practicing')) return places;
+
+  const queue = await loadPracticingQueue(supabase);
+  if (!queue) return places;
+
+  const today = todayInTaipei();
+  const ranks = rankById(queue);
+  for (const song of queue) {
+    places.set(song.id, { rank: ranks.get(song.id) ?? 0, total: queue.length, eta: describeEta(song.expected_at, today) });
+  }
+  return places;
 }

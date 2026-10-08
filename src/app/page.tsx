@@ -1,12 +1,16 @@
+import Link from 'next/link';
 import { CountUp } from '@/components/CountUp';
 import { EmptyLatest } from '@/components/EmptyLatest';
 import { EmptySlot } from '@/components/EmptySlot';
 import { Hero } from '@/components/Hero';
 import { HowItWorks } from '@/components/HowItWorks';
 import { Marquee } from '@/components/Marquee';
+import { PracticingQueue } from '@/components/PracticingQueue';
 import { Reveal } from '@/components/Reveal';
 import { SongCard } from '@/components/SongCard';
-import { LATEST_UPLOADS_LIMIT, SONG_COLUMNS, songHeading, type Song } from '@/lib/songs';
+import { todayInTaipei } from '@/lib/format';
+import { loadPracticingQueue } from '@/lib/queue';
+import { LATEST_UPLOADS_LIMIT, SONG_COLUMNS, songHeading, type Song, type SongWithEta } from '@/lib/songs';
 import { createClient } from '@/lib/supabase/server';
 
 const PRACTICING_LIMIT = 8;
@@ -15,26 +19,21 @@ const FALLBACK_MARQUEE = ['點一首你想聽的詩歌', '詩歌本 1–780・�
 type Stats = { uploaded: number; practicing: number; waiting: number };
 
 /** 統計與跑馬燈只是點綴，失敗時不該讓整個首頁掛掉。 */
-async function loadExtras(supabase: Awaited<ReturnType<typeof createClient>>): Promise<{ stats: Stats | null; practicing: Song[] }> {
+async function loadExtras(supabase: Awaited<ReturnType<typeof createClient>>): Promise<{ stats: Stats | null; practicing: SongWithEta[] }> {
   const head = { count: 'exact', head: true } as const;
   const [uploaded, practicing, waiting, practicingSongs] = await Promise.all([
     supabase.from('songs').select('id', head).eq('status', 'uploaded'),
     supabase.from('songs').select('id', head).eq('status', 'practicing'),
     supabase.from('songs').select('id', head).eq('status', 'open').gt('request_count', 0),
-    supabase
-      .from('songs')
-      .select(SONG_COLUMNS)
-      .eq('status', 'practicing')
-      .order('request_count', { ascending: false })
-      .limit(PRACTICING_LIMIT),
+    loadPracticingQueue(supabase, PRACTICING_LIMIT),
   ]);
 
-  const failures = [uploaded, practicing, waiting, practicingSongs].filter((r) => r.error);
+  const failures = [uploaded, practicing, waiting].filter((r) => r.error);
   failures.forEach((r) => console.error('HomePage: extras query failed', r.error));
   const failed = failures.length > 0 || [uploaded, practicing, waiting].some((r) => r.count === null);
   return {
     stats: failed ? null : { uploaded: uploaded.count ?? 0, practicing: practicing.count ?? 0, waiting: waiting.count ?? 0 },
-    practicing: practicingSongs.error ? [] : ((practicingSongs.data ?? []) as Song[]),
+    practicing: practicingSongs ?? [],
   };
 }
 
@@ -76,9 +75,12 @@ export default async function HomePage() {
             </h2>
           </div>
           {latest.length > 0 && (
-            <p className="numeral hidden pb-2 text-lg italic text-muted md:block">
-              {String(latest.length).padStart(2, '0')} / {String(LATEST_UPLOADS_LIMIT).padStart(2, '0')}
-            </p>
+            <Link href="/songs" className="group shrink-0 pb-2 text-sm font-medium text-accent underline-offset-4 hover:underline">
+              全部已上傳
+              <span aria-hidden="true" className="ml-1 inline-block transition-transform duration-500 ease-[var(--ease-out)] group-hover:translate-x-1">
+                →
+              </span>
+            </Link>
           )}
         </Reveal>
 
@@ -102,6 +104,10 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+
+      {extras.practicing.length > 0 && (
+        <PracticingQueue songs={extras.practicing} total={extras.stats?.practicing ?? extras.practicing.length} today={todayInTaipei()} />
+      )}
 
       <HowItWorks />
     </>

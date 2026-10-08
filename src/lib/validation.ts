@@ -112,6 +112,19 @@ export function parseFavoriteIds(raw: unknown[]): Parsed<number[]> {
   return ok(ids);
 }
 
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 預計上傳日（<input type="date"> 的 YYYY-MM-DD）；空字串代表沒有預計日。 */
+export function parseExpectedDate(raw: unknown): Parsed<string | null> {
+  const value = String(raw ?? '').trim();
+  if (value.length === 0) return ok(null);
+  if (!DATE_PATTERN.test(value)) return fail('預計上傳日格式不正確');
+  // 往返一次擋掉 2026-02-31 這種不存在的日期（月份超出範圍時 Date 是 Invalid Date）
+  const date = new Date(`${value}T00:00:00Z`);
+  const isRealDate = !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  return isRealDate ? ok(value) : fail('預計上傳日格式不正確');
+}
+
 /** 只接受 IG / YouTube 的 https 連結，避免 javascript: 之類的網址。 */
 export function parsePostUrl(raw: unknown): Parsed<string | null> {
   const value = String(raw ?? '').trim();

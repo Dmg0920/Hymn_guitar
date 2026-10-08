@@ -12,3 +12,8 @@ const FORMATS = {
 export function formatDate(iso: string, style: keyof typeof FORMATS = 'full'): string {
   return new Date(iso).toLocaleDateString('zh-TW', { ...FORMATS[style], timeZone: TIME_ZONE });
 }
+
+/** 台北時區的今天，格式 YYYY-MM-DD（與 date 欄位同格式，可直接字串比較）。 */
+export function todayInTaipei(now: Date = new Date()): string {
+  return now.toLocaleDateString('en-CA', { timeZone: TIME_ZONE });
+}

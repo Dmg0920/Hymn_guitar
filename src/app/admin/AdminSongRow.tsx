@@ -7,7 +7,7 @@ import { SongThumbnail } from '@/components/SongThumbnail';
 import { SubmitButton } from '@/components/SubmitButton';
 import { formatDate } from '@/lib/format';
 import { INITIAL_FORM_STATE } from '@/lib/form-state';
-import { STATUS_LABELS, STATUS_ORDER, songHeading, type Song, type SongStatus } from '@/lib/songs';
+import { STATUS_LABELS, STATUS_ORDER, songHeading, type SongStatus, type SongWithEta } from '@/lib/songs';
 import { createClient } from '@/lib/supabase/client';
 import { TITLE_MAX } from '@/lib/validation';
 import { updateSong } from './actions';
@@ -24,13 +24,14 @@ const THUMBNAIL_BUCKET = 'thumbnails';
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
 const THUMBNAIL_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
-type Props = { song: Song; requesters: Requester[] };
+type Props = { song: SongWithEta; requesters: Requester[] };
 
 export function AdminSongRow({ song, requesters }: Props) {
   const [state, action, pending] = useActionState(updateSong, INITIAL_FORM_STATE);
   // 欄位用 controlled：React 19 的 form action 結束後會 reset 表單，送出失敗時不能把剛改的內容洗掉
   const [status, setStatus] = useState<SongStatus>(song.status);
   const [title, setTitle] = useState(song.title ?? '');
+  const [expectedAt, setExpectedAt] = useState(song.expected_at ?? '');
   const [postUrl, setPostUrl] = useState(song.post_url ?? '');
   const [thumbnailUrl, setThumbnailUrl] = useState(song.thumbnail_url ?? '');
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -119,6 +120,18 @@ export function AdminSongRow({ song, requesters }: Props) {
             className="input"
           />
         </label>
+        {status === 'practicing' && (
+          <label className="block sm:col-span-2">
+            <span className="label">預計上傳日（選填，會顯示在首頁練習排程；有填的排在前面）</span>
+            <input
+              name="expected_at"
+              type="date"
+              value={expectedAt}
+              onChange={(e) => setExpectedAt(e.target.value)}
+              className="input sm:max-w-60"
+            />
+          </label>
+        )}
         <label className="block sm:col-span-2">
           <span className="label">IG / YouTube 連結</span>
           <input

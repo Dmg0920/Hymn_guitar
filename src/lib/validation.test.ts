@@ -5,6 +5,7 @@ import {
   FEEDBACK_MAX,
   escapeLikePattern,
   parseBio,
+  parseExpectedDate,
   parseFavoriteIds,
   parseFeedback,
   parseInstagram,
@@ -104,4 +105,14 @@ test('parseFavoriteIds：最多 5 首、不重複、正整數', () => {
   assert.equal(parseFavoriteIds(['0']).ok, false);
   assert.equal(parseFavoriteIds(['x']).ok, false);
   assert.equal(parseFavoriteIds([1, 2, 3, 4, 5, 6]).ok, false);
+});
+
+test('parseExpectedDate：空值、合法日期、不存在的日期與壞格式', () => {
+  assert.deepEqual(parseExpectedDate(''), { ok: true, value: null });
+  assert.deepEqual(parseExpectedDate(undefined), { ok: true, value: null });
+  assert.deepEqual(parseExpectedDate(' 2026-10-15 '), { ok: true, value: '2026-10-15' });
+  assert.deepEqual(parseExpectedDate('2028-02-29'), { ok: true, value: '2028-02-29' });
+  for (const bad of ['2026-02-31', '2026-13-01', '2026-10-5', '10/15', 'tomorrow', '2026-10-15T00:00']) {
+    assert.equal(parseExpectedDate(bad).ok, false, bad);
+  }
 });

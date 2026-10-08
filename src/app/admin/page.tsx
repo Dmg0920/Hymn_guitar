@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
 import { avatarPublicUrl } from '@/lib/avatar';
-import { BOOK_LABELS, SONG_COLUMNS, STATUS_LABELS, type Song } from '@/lib/songs';
+import { BOOK_LABELS, SONG_ETA_COLUMNS, STATUS_LABELS, type SongWithEta } from '@/lib/songs';
 import { createClient } from '@/lib/supabase/server';
 import { escapeLikePattern, parseSongCode } from '@/lib/validation';
 import { AdminSongRow, type Requester } from './AdminSongRow';
@@ -33,7 +33,7 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
   const qBook = first(params.book);
 
   const supabase = await createClient();
-  let query = supabase.from('songs').select(SONG_COLUMNS).limit(LIST_LIMIT);
+  let query = supabase.from('songs').select(SONG_ETA_COLUMNS).limit(LIST_LIMIT);
 
   if (q) {
     // 搜尋任何一首歌（包含沒人點過的），用來標記自己主動上傳的歌
@@ -51,13 +51,20 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
       .order('last_requested_at', { ascending: false });
   } else if (view === 'uploaded') {
     query = query.eq('status', 'uploaded').order('uploaded_at', { ascending: false });
+  } else if (view === 'practicing') {
+    // 與首頁排程相同的順序（lib/queue.ts）
+    query = query
+      .eq('status', 'practicing')
+      .order('expected_at', { ascending: true, nullsFirst: false })
+      .order('request_count', { ascending: false })
+      .order('id', { ascending: true });
   } else {
     query = query.eq('status', view).order('request_count', { ascending: false });
   }
 
   const { data, error } = await query;
   if (error) throw new Error(`讀取歌曲失敗：${error.message}`);
-  const songs = (data ?? []) as Song[];
+  const songs = (data ?? []) as SongWithEta[];
   const requesters = await loadRequesters(songs.map((s) => s.id));
   const unreadFeedback = await countUnreadFeedback();
 
