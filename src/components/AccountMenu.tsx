@@ -3,14 +3,15 @@
 import Link from 'next/link';
 import { useEffect, useId, useRef, useState } from 'react';
 import { signOut } from '@/app/login/actions';
+import { Avatar } from './Avatar';
 
-type Props = { nickname: string | null; isAdmin: boolean };
+type Props = { nickname: string | null; avatarUrl: string | null; isAdmin: boolean };
 
 const menuItem =
   'flex min-h-11 items-center justify-between rounded-xl px-3 text-[0.9375rem] font-medium transition-colors hover:bg-paper-2';
 
 /** 帳號選單：頭像按鈕展開，點外面 / 按 Esc / 點選項都會收合。 */
-export function AccountMenu({ nickname, isAdmin }: Props) {
+export function AccountMenu({ nickname, avatarUrl, isAdmin }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -34,8 +35,6 @@ export function AccountMenu({ nickname, isAdmin }: Props) {
     };
   }, [open]);
 
-  const initial = nickname ? (Array.from(nickname)[0] ?? '?') : '?';
-
   return (
     <div
       ref={rootRef}
@@ -54,9 +53,7 @@ export function AccountMenu({ nickname, isAdmin }: Props) {
         onClick={() => setOpen((v) => !v)}
         className="flex min-h-11 items-center gap-2 rounded-full border border-field bg-card py-1 pl-1 pr-1 transition-colors hover:border-accent sm:pr-4"
       >
-        <span className="grid size-8 place-items-center rounded-full bg-accent font-serif text-sm font-bold text-accent-ink">
-          {initial}
-        </span>
+        <Avatar src={avatarUrl} nickname={nickname} />
         <span className="hidden max-w-28 truncate text-sm font-medium sm:block">{nickname ?? '設定暱稱'}</span>
       </button>
 
@@ -82,7 +79,10 @@ export function AccountMenu({ nickname, isAdmin }: Props) {
           </Link>
         )}
         <Link href="/me" className={menuItem}>
-          我的點歌 <span aria-hidden="true" className="text-muted">→</span>
+          我的檔案 <span aria-hidden="true" className="text-muted">→</span>
+        </Link>
+        <Link href="/me/settings" className={menuItem}>
+          帳號設定 <span aria-hidden="true" className="text-muted">→</span>
         </Link>
         <Link href="/feedback" className={menuItem}>
           意見箱 <span aria-hidden="true" className="text-muted">→</span>

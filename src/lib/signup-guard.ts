@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export type SignupGate = { ok: true } | { ok: false; reason: 'rate_limited' | 'error' };
 
 /**
- * 註冊前的頻率檢查（register_signup_attempt RPC，見 0005 migration）。
+ * 註冊前的頻率檢查（register_signup_attempt RPC，見 0007 migration）。
  * 只存 IP 的 HMAC；檢查失敗（含 RPC 不存在）一律拒絕，不放行。
  */
 export async function passSignupGate(): Promise<SignupGate> {

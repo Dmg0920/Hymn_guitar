@@ -7,6 +7,7 @@ export type Viewer = {
   id: string;
   username: string | null;
   nickname: string | null;
+  avatarPath: string | null;
   isAdmin: boolean;
 };
 
@@ -29,16 +30,20 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('username, nickname, is_admin')
+    .select('username, nickname, avatar_path, is_admin')
     .eq('id', id)
     .maybeSingle();
   if (error) throw new Error(`讀取個人資料失敗：${error.message}`);
 
+  // profile 一定會由 trigger 建立；找不到代表帳號已被刪除（舊 session 還沒過期），當作未登入
+  if (!profile) return null;
+
   return {
     id,
-    username: profile?.username ?? null,
-    nickname: profile?.nickname ?? null,
-    isAdmin: profile?.is_admin ?? false,
+    username: profile.username,
+    nickname: profile.nickname,
+    avatarPath: profile.avatar_path,
+    isAdmin: profile.is_admin,
   };
 });
 

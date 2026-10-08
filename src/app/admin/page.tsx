@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
+import { avatarPublicUrl } from '@/lib/avatar';
 import { BOOK_LABELS, SONG_COLUMNS, STATUS_LABELS, type Song } from '@/lib/songs';
 import { createClient } from '@/lib/supabase/server';
 import { escapeLikePattern, parseSongCode } from '@/lib/validation';
@@ -67,14 +68,19 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
           <p className="eyebrow">Admin</p>
           <h1 className="mt-4 font-serif text-5xl font-black tracking-wide md:text-6xl">後台</h1>
         </div>
-        <Link href="/admin/feedback" className="btn-ghost min-h-11 px-5 text-sm">
-          意見箱
-          {unreadFeedback > 0 && (
-            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-ink">
-              {unreadFeedback}
-            </span>
-          )}
-        </Link>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Link href="/admin/users" className="btn-ghost min-h-11 px-5 text-sm">
+            使用者
+          </Link>
+          <Link href="/admin/feedback" className="btn-ghost min-h-11 px-5 text-sm">
+            意見箱
+            {unreadFeedback > 0 && (
+              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-ink">
+                {unreadFeedback}
+              </span>
+            )}
+          </Link>
+        </div>
       </div>
 
       <form className="card flex flex-wrap gap-2 p-3" role="search">
@@ -153,17 +159,28 @@ async function loadRequesters(songIds: number[]): Promise<Map<number, Requester[
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('requests')
-    .select('song_id, message, created_at, profiles(nickname)')
+    .select('song_id, message, created_at, profiles(nickname, avatar_path, ig_handle)')
     .in('song_id', songIds)
     .order('created_at', { ascending: false });
   if (error) throw new Error(`讀取點歌者失敗：${error.message}`);
 
-  type Row = { song_id: number; message: string | null; created_at: string; profiles: { nickname: string | null } | null };
+  type Row = {
+    song_id: number;
+    message: string | null;
+    created_at: string;
+    profiles: { nickname: string | null; avatar_path: string | null; ig_handle: string | null } | null;
+  };
   for (const row of (data ?? []) as unknown as Row[]) {
     const list = result.get(row.song_id) ?? [];
     result.set(row.song_id, [
       ...list,
-      { nickname: row.profiles?.nickname ?? '（未設定）', message: row.message, createdAt: row.created_at },
+      {
+        nickname: row.profiles?.nickname ?? '（未設定）',
+        avatarUrl: avatarPublicUrl(row.profiles?.avatar_path),
+        igHandle: row.profiles?.ig_handle ?? null,
+        message: row.message,
+        createdAt: row.created_at,
+      },
     ]);
   }
   return result;
