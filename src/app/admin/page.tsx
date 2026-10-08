@@ -68,14 +68,19 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
           <p className="eyebrow">Admin</p>
           <h1 className="mt-4 font-serif text-5xl font-black tracking-wide md:text-6xl">後台</h1>
         </div>
-        <Link href="/admin/feedback" className="btn-ghost min-h-11 px-5 text-sm">
-          意見箱
-          {unreadFeedback > 0 && (
-            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-ink">
-              {unreadFeedback}
-            </span>
-          )}
-        </Link>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Link href="/admin/users" className="btn-ghost min-h-11 px-5 text-sm">
+            使用者
+          </Link>
+          <Link href="/admin/feedback" className="btn-ghost min-h-11 px-5 text-sm">
+            意見箱
+            {unreadFeedback > 0 && (
+              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-ink">
+                {unreadFeedback}
+              </span>
+            )}
+          </Link>
+        </div>
       </div>
 
       <form className="card flex flex-wrap gap-2 p-3" role="search">

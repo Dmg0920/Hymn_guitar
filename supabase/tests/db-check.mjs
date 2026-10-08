@@ -21,7 +21,7 @@ const STUBS = `
   alter table storage.objects enable row level security;
   grant all on storage.objects to authenticated;
   -- Supabase 預設會把 public schema 的表授權給 anon/authenticated，模擬這個預設
-  alter default privileges in schema public grant all on tables to anon, authenticated;
+  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
   alter default privileges in schema public grant all on functions to anon, authenticated;
 `;
 await db.exec(STUBS);
@@ -214,7 +214,7 @@ await as(carol, async () => {
   console.log('✓ 意見箱：RPC 驗證、RLS、每日上限、admin 可刪');
 }
 
-// 個人檔案（0005）：公開 / 私人、頭像路徑、最愛詩歌、頭像 storage
+// 個人檔案（0006）：公開 / 私人、頭像路徑、最愛詩歌、頭像 storage
 {
   const eve = await mk({ username: 'eve', nickname: '伊芙' });
   const frank = await mk({ username: 'frank', nickname: '法蘭克' });
@@ -318,6 +318,29 @@ await as(carol, async () => {
   assert.equal((await one(`select count(*)::int n from requests where user_id = $1`, [eve])).n, 0);
   assert.equal((await one(`select request_count from songs where id = $1`, [songIds[0]])).request_count, before - 1);
   console.log('✓ 刪除帳號會連帶清掉個人資料並扣回點播數');
+}
+
+// 點歌提醒（0005）：進度表只有 service_role（伺服器 secret key）碰得到
+{
+  const state = await one(`select name, last_sent_at from notification_state`);
+  assert.equal(state.name, 'request_digest');
+  for (const [label, uid] of [['anon', null], ['一般使用者', alice], ['管理員', admin]]) {
+    await as(uid, async () => {
+      await expectErr(db.query(`select * from notification_state`), /permission denied/, `${label}讀不到 notification_state`);
+      await expectErr(db.query(`update notification_state set last_sent_at = now()`), /permission denied/, `${label}不能改 notification_state`);
+    });
+  }
+  await db.exec(`set role service_role`);
+  try {
+    // 與 cron 端點相同的查詢：只拿進度之後的點歌，推進後就不會重複
+    await db.query(`update notification_state set last_sent_at = $1`, ['2000-01-01T00:00:00Z']);
+    const total = (await one(`select count(*)::int n from requests`)).n;
+    const fresh = (await db.query(`select 1 from requests where created_at > (select last_sent_at from notification_state)`)).rows.length;
+    assert.equal(fresh, total);
+    await db.query(`update notification_state set last_sent_at = (select max(created_at) from requests)`);
+    assert.equal((await db.query(`select 1 from requests where created_at > (select last_sent_at from notification_state)`)).rows.length, 0);
+  } finally { await db.exec(`reset role`); }
+  console.log('✓ 點歌提醒進度表：使用者與管理員 UI 都碰不到，service_role 可讀寫');
 }
 
 // 0002 的回填：模擬已經只跑過 0001、帳號 username 為空的正式資料庫
