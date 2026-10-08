@@ -31,6 +31,8 @@ pnpm catalog:build      # data/raw/*.txt → 重新產生 supabase/seed.sql
 
 **個人檔案（0006）預設私人。** `profiles` 新增 `bio`、`avatar_path`、`ig_handle`、`is_public`。公開檔案**只能**透過 `public_profiles` view 讀取（以擁有者權限執行、只選安全欄位，不含 `username` / `is_admin`，點歌只給總數）；不要為了公開檔案放寬 `profiles` 的 RLS 或 column grant。最愛詩歌只能經 `set_favorites()` 寫入；RPC 錯誤代碼對應在 `src/app/me/edit/actions.ts` 的 `FAVORITE_ERRORS`。頭像存在公開 bucket `avatars`，路徑一律是 `<user id>/<時間戳>.<ext>`（DB constraint 與 storage policy 都強制）；瀏覽器端先裁切縮小，Server Action 再用 magic bytes（`src/lib/avatar-type.ts`）驗證並上傳，換頭像時刪舊檔。徽章不入庫，由 `src/lib/badges.ts` 依統計即時計算。刪除帳號走 admin API `deleteUser`，靠 `on delete cascade` 清資料。
 
+**上傳通知與練習排程（0008）。** `requests.seen_at` 為空且歌已上傳 = 未讀（`src/lib/notifications.ts`）；使用者只有 `seen_at` 的欄位層級 UPDATE 權限，標記已讀走 `src/app/me/actions.ts`，而且**只能標已上傳的歌**（否則等待／練習中的歌被標成已讀，上傳時就不會再通知）。Header 在每頁查未讀數，查詢失敗一律退回 0。`songs.expected_at`（預計上傳日）不在 `SONG_COLUMNS`，要用 `SONG_ETA_COLUMNS`/`SongWithEta`，讓 migration 還沒跑時其他讀歌的查詢不受影響；`songs` 的 SELECT 是欄位清單制，新增公開欄位要同步 `grant select (...)`。練習排程順序在 `src/lib/queue.ts`（SQL order）與 `src/lib/schedule.ts` 的 `compareQueue` 各有一份，改規則時兩邊要一起改。
+
 **Supabase client 有三種，不要混用**（`src/lib/supabase/`）：
 - `server.ts`：以使用者 cookie 帶 session 的 server client，受 RLS 約束，Server Component / Server Action 預設用這個。
 - `client.ts`：瀏覽器端。
@@ -42,7 +44,7 @@ pnpm catalog:build      # data/raw/*.txt → 重新產生 supabase/seed.sql
 
 **登入方式有兩種**：帳號密碼（無需 email，為了 IG 內建瀏覽器）與 Email 6 位數 OTP。帳號密碼使用者在 Supabase Auth 中是假 email `帳號@<USERNAME_EMAIL_DOMAIN>`（預設 `users.hymn-guitar.invalid`，`usernameToEmail()` 產生）；上線後不可改該網域。
 
-**頁面結構**（`src/app/`）：`/`（最新 5 首）、`/request`、`/me`（含 `/me/edit`、`/me/settings`）、`/admin`、公開檔案 `/u/[id]` 皆採「`page.tsx` + 同資料夾 `actions.ts`（Server Actions）+ client form 元件」。Action 統一回傳 `FormState`（`src/lib/form-state.ts`），輸入驗證集中在 `src/lib/validation.ts`。
+**頁面結構**（`src/app/`）：`/`（最新 5 首＋練習排程）、`/songs`（已上傳清單，篩選與頁碼全在網址參數，解析在 `src/lib/songs-query.ts`）、`/request`、`/me`（含 `/me/edit`、`/me/settings`）、`/admin`、公開檔案 `/u/[id]` 皆採「`page.tsx` + 同資料夾 `actions.ts`（Server Actions）+ client form 元件」。Action 統一回傳 `FormState`（`src/lib/form-state.ts`），輸入驗證集中在 `src/lib/validation.ts`。
 
 **視覺語彙：「教會詩歌號碼板」＋「吉他六弦」。** 設計 token、`@utility`（`btn-primary`、`input`、`card`、`board`、`eyebrow`、`numeral`、`wrap*`…）與 keyframes 都在 `src/app/globals.css`；改色彩只動 `:root` 與暗色那一組變數。幾個慣例：
 - 深色「號碼板」（`.board`）在亮暗兩個主題都維持深色；號碼、拉丁字用 `numeral`（Fraunces），中文標題用 `font-serif`（Noto Serif TC）。

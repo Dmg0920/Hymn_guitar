@@ -17,6 +17,10 @@ export type Song = {
 export const SONG_COLUMNS =
   'id, book, code, title, category, status, post_url, thumbnail_url, uploaded_at, request_count';
 
+/** 練習中的歌多一個「預計上傳日」（0008）。獨立成一組欄位，migration 還沒跑時不會拖垮其他讀歌的查詢。 */
+export type SongWithEta = Song & { expected_at: string | null };
+export const SONG_ETA_COLUMNS = `${SONG_COLUMNS}, expected_at`;
+
 export const LATEST_UPLOADS_LIMIT = 5;
 
 export const BOOK_LABELS: Record<SongBook, string> = {

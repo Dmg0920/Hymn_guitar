@@ -374,6 +374,68 @@ await as(carol, async () => {
   console.log('✓ 點歌提醒進度表：使用者與管理員 UI 都碰不到，service_role 可讀寫');
 }
 
+// 上傳通知與練習排程（0008）
+{
+  const s100 = (await one(`select id from songs where book='hymn' and code='100'`)).id;
+  // 前面的測試已經讓 alice 點過的 s384 上傳了，這裡只看 s100，不受影響
+  const unseen = (uid) => one(
+    `select count(*)::int n from requests r join songs s on s.id = r.song_id
+     where r.user_id = $1 and r.song_id = $2 and r.seen_at is null and s.status = 'uploaded'`, [uid, s100]);
+
+  await as(alice, () => db.query(`select request_song($1)`, [s100]));
+  assert.equal((await as(alice, () => unseen(alice))).n, 0); // 還沒上傳，不算未讀
+  await as(admin, () => db.query(
+    `update songs set status='uploaded', post_url='https://www.instagram.com/p/x/', uploaded_at=now() where id=$1`, [s100]));
+  assert.equal((await as(alice, () => unseen(alice))).n, 1);
+  assert.equal((await as(bob, () => unseen(bob))).n, 0);
+  console.log('✓ 歌上傳後，點歌的人多一則未讀，沒點的人不受影響');
+
+  await as(bob, async () => {
+    const r = await db.query(`update requests set seen_at = now() where user_id = $1`, [alice]);
+    assert.equal(r.affectedRows, 0);
+  });
+  assert.equal((await as(alice, () => unseen(alice))).n, 1);
+  console.log('✓ 不能把別人的點歌標成已讀');
+
+  await as(alice, async () => {
+    await expectErr(db.query(`update requests set message = 'hack' where song_id = $1`, [s100]), /permission denied/, '只能改 seen_at，不能改留言');
+    await expectErr(db.query(`update requests set user_id = $1 where song_id = $2`, [bob, s100]), /permission denied/, '不能把點歌轉給別人');
+    const r = await db.query(`update requests set seen_at = now() where song_id = $1 and seen_at is null`, [s100]);
+    assert.equal(r.affectedRows, 1);
+  });
+  assert.equal((await as(alice, () => unseen(alice))).n, 0);
+  console.log('✓ 本人可以標示已讀');
+  await as(null, () => expectErr(db.query(`update requests set seen_at = now()`), /permission denied/, 'anon 不能改 requests'));
+
+  // 預計上傳日：公開可讀，只有管理員能改
+  await as(admin, () => db.query(`update songs set status='practicing', expected_at='2026-10-15' where id=$1`, [s384]));
+  await as(null, async () => {
+    assert.equal((await one(`select to_char(expected_at, 'YYYY-MM-DD') d from songs where id=$1`, [s384])).d, '2026-10-15');
+  });
+  await as(alice, async () => {
+    const r = await db.query(`update songs set expected_at = '2030-01-01' where id=$1`, [s384]);
+    assert.equal(r.affectedRows, 0);
+  });
+  console.log('✓ expected_at 公開可讀，一般使用者改不了');
+}
+
+// 0008 的回填：已經上傳的點歌視為已讀，還沒上傳的維持未讀
+{
+  const legacy = new PGlite();
+  await legacy.exec(STUBS);
+  for (const file of ['0001_init.sql']) await legacy.exec(readFileSync(`${migrationsDir}/${file}`, 'utf8'));
+  const { id } = (await legacy.query(`insert into auth.users (raw_user_meta_data) values ($1) returning id`, [{ nickname: '舊用戶' }])).rows[0];
+  await legacy.exec(`
+    insert into songs (book, code, category, status, post_url, uploaded_at) values
+      ('hymn', '1', 'x', 'uploaded', 'https://www.instagram.com/p/a/', now()),
+      ('hymn', '2', 'x', 'practicing', null, null);`);
+  await legacy.query(`insert into requests (user_id, song_id) select $1, id from songs`, [id]);
+  await legacy.exec(readFileSync(`${migrationsDir}/0008_upload_notify_and_eta.sql`, 'utf8'));
+  const rows = (await legacy.query(`select s.status, r.seen_at is not null as seen from requests r join songs s on s.id = r.song_id order by s.code`)).rows;
+  assert.deepEqual(rows, [{ status: 'uploaded', seen: true }, { status: 'practicing', seen: false }]);
+  console.log('✓ 0008 會把部署前已上傳的點歌視為已讀');
+}
+
 // 0002 的回填：模擬已經只跑過 0001、帳號 username 為空的正式資料庫
 {
   const legacy = new PGlite();

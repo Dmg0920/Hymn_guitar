@@ -5,13 +5,13 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { signOut } from '@/app/login/actions';
 import { Avatar } from './Avatar';
 
-type Props = { nickname: string | null; avatarUrl: string | null; isAdmin: boolean };
+type Props = { nickname: string | null; avatarUrl: string | null; isAdmin: boolean; unseenCount: number };
 
 const menuItem =
   'flex min-h-11 items-center justify-between rounded-xl px-3 text-[0.9375rem] font-medium transition-colors hover:bg-paper-2';
 
 /** 帳號選單：頭像按鈕展開，點外面 / 按 Esc / 點選項都會收合。 */
-export function AccountMenu({ nickname, avatarUrl, isAdmin }: Props) {
+export function AccountMenu({ nickname, avatarUrl, isAdmin, unseenCount }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -49,12 +49,15 @@ export function AccountMenu({ nickname, avatarUrl, isAdmin }: Props) {
         type="button"
         aria-expanded={open}
         aria-controls={menuId}
-        aria-label={nickname ? `帳號選單：${nickname}` : '帳號選單：設定暱稱'}
+        aria-label={`${nickname ? `帳號選單：${nickname}` : '帳號選單：設定暱稱'}${unseenCount > 0 ? `（${unseenCount} 首點歌已上傳）` : ''}`}
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-11 items-center gap-2 rounded-full border border-field bg-card py-1 pl-1 pr-1 transition-colors hover:border-accent sm:pr-4"
+        className="relative flex min-h-11 items-center gap-2 rounded-full border border-field bg-card py-1 pl-1 pr-1 transition-colors hover:border-accent sm:pr-4"
       >
         <Avatar src={avatarUrl} nickname={nickname} />
         <span className="hidden max-w-28 truncate text-sm font-medium sm:block">{nickname ?? '設定暱稱'}</span>
+        {unseenCount > 0 && (
+          <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 size-3.5 rounded-full border-2 border-paper bg-accent" />
+        )}
       </button>
 
       <div
@@ -78,8 +81,15 @@ export function AccountMenu({ nickname, avatarUrl, isAdmin }: Props) {
             設定暱稱 <span aria-hidden="true">→</span>
           </Link>
         )}
-        <Link href="/me" className={menuItem}>
-          我的檔案 <span aria-hidden="true" className="text-muted">→</span>
+        <Link href={unseenCount > 0 ? '/me#requests' : '/me'} className={menuItem}>
+          我的檔案
+          {unseenCount > 0 ? (
+            <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-ink">
+              {unseenCount} 首已上傳
+            </span>
+          ) : (
+            <span aria-hidden="true" className="text-muted">→</span>
+          )}
         </Link>
         <Link href="/me/settings" className={menuItem}>
           帳號設定 <span aria-hidden="true" className="text-muted">→</span>

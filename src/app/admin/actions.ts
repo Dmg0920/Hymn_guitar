@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseUrl } from '@/lib/supabase/env';
 import {
   TITLE_MAX,
+  parseExpectedDate,
   parseOptionalText,
   parsePassword,
   parsePostUrl,
@@ -41,6 +42,8 @@ export async function updateSong(_: FormState, formData: FormData): Promise<Form
   if (status === 'uploaded' && !postUrl.value) return { error: '標記為已上傳前請先貼上連結' };
   const thumbnailUrl = parseThumbnailUrl(formData.get('thumbnail_url'));
   if (!thumbnailUrl.ok) return { error: thumbnailUrl.error };
+  const expectedAt = parseExpectedDate(formData.get('expected_at'));
+  if (!expectedAt.ok) return { error: expectedAt.error };
 
   const supabase = await createClient();
   const { data: current, error: readError } = await supabase
@@ -61,6 +64,8 @@ export async function updateSong(_: FormState, formData: FormData): Promise<Form
       post_url: postUrl.value,
       thumbnail_url: thumbnailUrl.value,
       uploaded_at: uploadedAt,
+      // 預計上傳日只屬於練習中的歌；離開練習中就清掉，之後再回來要重填
+      expected_at: status === 'practicing' ? expectedAt.value : null,
     })
     .eq('id', songId);
   if (error) {
