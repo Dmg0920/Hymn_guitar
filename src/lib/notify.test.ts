@@ -65,3 +65,12 @@ test('同一首被大量使用者點、意見很多很長時，仍在上限內�
   assert.match(text, /…還有 40 則，到意見箱查看/);
   assert.ok(text.length <= 4096, `訊息 ${text.length} 字`);
 });
+
+test('截斷發生在 emoji 中間時，不產生落單的 surrogate（JSON 編碼後 Telegram 會拒收）', () => {
+  // 'a' * 39 + 😀：第 40 個 UTF-16 單位剛好是 😀 的前半
+  const text = buildDigest([row(song(1, '10'), '甲', `${'a'.repeat(39)}😀後面還有`)], [], 'https://x/admin')!;
+  assert.ok(text.isWellFormed(), '訊息含有落單的 surrogate');
+
+  const long = buildDigest([row(song(1, '10'), '甲')], [fb('乙', `${'a'.repeat(99)}😀後面還有`)], 'https://x/admin')!;
+  assert.ok(long.isWellFormed(), '意見摘要含有落單的 surrogate');
+});

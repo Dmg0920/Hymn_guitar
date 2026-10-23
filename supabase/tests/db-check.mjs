@@ -168,6 +168,7 @@ await as(carol, async () => {
   const ids = (await db.query(`select id from songs where book='supplement' order by id limit 11`)).rows.map((r) => r.id);
   for (const id of ids.slice(0, 10)) await db.query(`select request_song($1)`, [id]);
   await expectErr(db.query(`select request_song($1)`, [ids[10]]), /rate_limited/, '一天最多點 10 首');
+  await db.query(`select request_song($1, null, $2)`, [ids[0], '改留言']); // 更新留言不吃額度（吃額度的話會是 rate_limited）
   await db.query(`delete from requests where user_id = $1`, [carol]);
   await expectErr(db.query(`select request_song(null, $1)`, ['垃圾歌名']), /rate_limited/, '取消點歌不會重置每日上限');
   await expectErr(db.query(`select count(*) from request_log`), /permission denied/, '使用者碰不到 request_log');

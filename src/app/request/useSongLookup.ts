@@ -10,6 +10,11 @@ const SEARCH_LIMIT = 8;
 
 type CacheEntry<T> = { data: T } | { error: true };
 
+/** 失敗的查詢不該永久快取：開始查別的東西時清掉，之後回到原本的輸入就會重試。 */
+function withoutErrors<T>(cache: Record<string, CacheEntry<T>>): Record<string, CacheEntry<T>> {
+  return Object.fromEntries(Object.entries(cache).filter(([, entry]) => !('error' in entry)));
+}
+
 export type CodeLookup =
   | { kind: 'empty' }
   | { kind: 'invalid'; message: string }
@@ -34,6 +39,7 @@ export function useSongByCode(book: 'hymn' | 'supplement', input: string): CodeL
     if (!key || !code || cached) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
+      setCache((prev) => withoutErrors(prev));
       const { data, error } = await createClient()
         .from('songs')
         .select(SONG_COLUMNS)
@@ -73,6 +79,7 @@ export function useTitleSearch(input: string): TitleSearch {
     if (!query || cached) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
+      setCache((prev) => withoutErrors(prev));
       const { data, error } = await createClient()
         .from('songs')
         .select(SONG_COLUMNS)

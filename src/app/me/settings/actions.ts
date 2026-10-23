@@ -49,19 +49,22 @@ export async function deleteAccount(_: FormState, formData: FormData): Promise<F
   if (viewer.isAdmin) return { error: '管理員帳號不能直接刪除，請先在資料庫取消管理員身分' };
 
   const supabase = await createClient();
+  const admin = createAdminClient();
 
-  // 先清頭像檔案（用本人身分，受 storage policy 限制只能動自己的資料夾）
-  const { data: files } = await supabase.storage.from(AVATAR_BUCKET).list(viewer.id);
-  if (files && files.length > 0) {
-    const { error } = await supabase.storage.from(AVATAR_BUCKET).remove(files.map((f) => `${viewer.id}/${f.name}`));
-    if (error) console.error('deleteAccount: avatar cleanup failed', error);
-  }
-
-  // 刪除 auth 使用者會連帶刪掉 profile、點歌、最愛、意見（on delete cascade）
-  const { error } = await createAdminClient().auth.admin.deleteUser(viewer.id);
+  // 刪除 auth 使用者會連帶刪掉 profile、點歌、最愛、意見（on delete cascade）。
+  // 先刪帳號、再清檔案：刪帳號失敗時，使用者還在，頭像不會變成壞圖。
+  const { error } = await admin.auth.admin.deleteUser(viewer.id);
   if (error) {
     console.error('deleteAccount failed', error);
     return { error: '刪除失敗，請稍後再試' };
+  }
+
+  // 帳號已不存在，使用者身分無法再通過 storage policy，改用 admin client 清頭像（失敗只記錄，殘檔不影響結果）
+  const avatars = admin.storage.from(AVATAR_BUCKET);
+  const { data: files } = await avatars.list(viewer.id);
+  if (files && files.length > 0) {
+    const { error: removeError } = await avatars.remove(files.map((f) => `${viewer.id}/${f.name}`));
+    if (removeError) console.error('deleteAccount: avatar cleanup failed', removeError);
   }
 
   // 帳號已不存在，signOut 的撤銷請求可能失敗，但本機 cookie 仍會被清掉

@@ -23,10 +23,17 @@ const MESSAGE_SNIPPET = 40;
 const FEEDBACK_SNIPPET = 100;
 const MESSAGE_LIMIT = 4000;
 
+/** 取前 max 個 UTF-16 單位；若剛好切在 emoji 中間，連落單的前半一起丟掉（否則訊息含非法字元）。 */
+function sliceSafe(text: string, max: number): string {
+  const cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
 /** 換行改空白、超過長度加「…」，讓每一則在訊息裡只佔一行。 */
 function snippet(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim();
-  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+  return flat.length > max ? `${sliceSafe(flat, max)}…` : flat;
 }
 
 function requestSection(rows: NewRequest[]): string[] {
@@ -84,7 +91,7 @@ export function buildDigest(
   out.push(feedbackLines.length > 0 ? `${adminUrl}\n${adminUrl}/feedback` : adminUrl);
 
   const text = out.join('\n\n');
-  return text.length > MESSAGE_LIMIT ? `${text.slice(0, MESSAGE_LIMIT - 1)}…` : text;
+  return text.length > MESSAGE_LIMIT ? `${sliceSafe(text, MESSAGE_LIMIT - 1)}…` : text;
 }
 
 export function telegramConfigured(): boolean {
